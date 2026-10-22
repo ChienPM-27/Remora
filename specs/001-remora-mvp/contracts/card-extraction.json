@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CardExtractionResponseContract",
+  "description": "Contract for /v1/ai/extract-card JSON response",
+  "type": "object",
+  "required": ["title", "summary", "tags", "content_type", "ocr_text"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "maxLength": 80,
+      "description": "Short title for the study asset"
+    },
+    "summary": {
+      "type": "string",
+      "description": "2-4 sentence executive summary preserving formulas and numbers verbatim"
+    },
+    "tags": {
+      "type": "object",
+      "required": ["subject", "topics"],
+      "properties": {
+        "subject": { "type": "string" },
+        "topics": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "content_type": {
+      "type": "string",
+      "enum": ["THEORY", "PROBLEM", "SOLUTION", "CODE", "NOTES", "UNKNOWN"]
+    },
+    "ocr_text": {
+      "type": "string",
+      "description": "All readable text extracted from the screenshot"
+    }
+  },
+  "additionalProperties": false
+}

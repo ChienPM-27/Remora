@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EmbeddingContract",
+  "description": "Contract for /v1/ai/embeddings request and response",
+  "definitions": {
+    "EmbeddingRequest": {
+      "type": "object",
+      "required": ["text", "task_type"],
+      "properties": {
+        "text": { "type": "string" },
+        "task_type": {
+          "type": "string",
+          "enum": ["RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "EmbeddingResponse": {
+      "type": "object",
+      "required": ["embedding", "dimension"],
+      "properties": {
+        "embedding": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 768,
+          "maxItems": 768,
+          "description": "L2-normalized 768-float32 array"
+        },
+        "dimension": {
+          "type": "integer",
+          "const": 768
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

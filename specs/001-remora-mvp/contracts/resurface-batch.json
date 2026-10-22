@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ResurfaceBatchContract",
+  "description": "Contract for /v1/ai/resurface-batch request and response",
+  "definitions": {
+    "CandidateItem": {
+      "type": "object",
+      "required": ["candidate_id", "title", "summary", "tags", "content_type"],
+      "properties": {
+        "candidate_id": { "type": "integer" },
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "tags": {
+          "type": "object",
+          "properties": {
+            "subject": { "type": "string" },
+            "topics": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "content_type": {
+          "type": "string",
+          "enum": ["THEORY", "PROBLEM", "SOLUTION", "CODE", "NOTES", "UNKNOWN"]
+        },
+        "user_intent": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "ResurfaceResultItem": {
+      "type": "object",
+      "required": [
+        "candidate_id",
+        "group",
+        "relation",
+        "new_info",
+        "benefit",
+        "reason",
+        "confidence"
+      ],
+      "properties": {
+        "candidate_id": {
+          "type": "integer",
+          "description": "Strictly matches an integer ID from candidate input"
+        },
+        "group": {
+          "type": "string",
+          "enum": ["SIMILAR", "COMPLEMENTARY", "ACTIONABLE"]
+        },
+        "relation": {
+          "type": "string",
+          "enum": ["DUPLICATE", "SUPPLEMENT", "EXPLANATION", "CONTRADICTION"]
+        },
+        "new_info": { "type": "string" },
+        "benefit": { "type": "string" },
+        "reason": { "type": "string" },
+        "confidence": {
+          "type": "number",
+          "exclusiveMinimum": 0.80,
+          "maximum": 1.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResurfaceBatchRequest": {
+      "type": "object",
+      "required": ["new_card", "candidates"],
+      "properties": {
+        "new_card": {
+          "type": "object",
+          "required": ["title", "summary", "tags", "content_type"],
+          "properties": {
+            "title": { "type": "string" },
+            "summary": { "type": "string" },
+            "tags": {
+              "type": "object",
+              "properties": {
+                "subject": { "type": "string" },
+                "topics": { "type": "array", "items": { "type": "string" } }
+              }
+            },
+            "content_type": {
+              "type": "string",
+              "enum": ["THEORY", "PROBLEM", "SOLUTION", "CODE", "NOTES", "UNKNOWN"]
+            },
+            "user_intent": { "type": ["string", "null"] }
+          },
+          "additionalProperties": false
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/definitions/CandidateItem" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResurfaceBatchResponse": {
+      "type": "object",
+      "required": ["results"],
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/ResurfaceResultItem" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
