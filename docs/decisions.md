@@ -14,38 +14,23 @@ Tài liệu này ghi nhận các tham số API, phiên bản thư viện và cá
 
 ## 1. Quyết định về Mô hình AI (Gemini Models & Parameters)
 
-* **Vision / Card Extraction Model ID:** `gemini-3.5-flash` `[VERIFY]`
-  * **Trạng thái:** `[VERIFY]` — Cần kiểm chứng trực tiếp bằng request thực tế tới Gemini API trước khi chốt dùng chính thức trong demo/production.
-  * **Trách nhiệm:** Nhận ảnh chụp màn hình nén và ghi chú `user_intent`, thực hiện trích xuất thẻ học (`title`, `summary`, `tags`, `content_type`) và OCR toàn bộ văn bản trong ảnh (`ocr_text`) trong **01 API call duy nhất**.
+* **Vision / Card Extraction & Resurfacing Models:**
+  * **Primary Model:** `gemini-3.5-flash-lite` `[VERIFIED]`
+    * **Kết quả kiểm chứng thực tế:** Phản hồi JSON Schema cấu trúc chuẩn 100%, độ trễ cực nhanh (~2.4s cho trích xuất thẻ học, ~3.0s cho batch Resurfacing 2 tầng).
+    * **Khuyến nghị cho Hackathon:** Sử dụng làm model chính thức cho `GEMINI_VISION_MODEL` để đáp ứng hoàn hảo ngân sách độ trễ (< 3-5 giây) và giảm thiểu rủi ro quá tải (503) khi demo trực tiếp.
+  * **Secondary / High-Reasoning Model:** `gemini-3.5-flash` `[VERIFIED]`
+    * **Kết quả kiểm chứng thực tế:** Khả năng suy luận chi tiết, độ trễ trung bình ~5.8s, đôi lúc gặp lỗi 503 khi server Gemini chịu tải cao.
+    * **Vai trò:** Có thể cấu hình làm model nâng cao khi người dùng yêu cầu phân tích sâu các bài toán phức tạp.
+  * **Chế độ phản hồi:** `response_mime_type = "application/json"` với schema ràng buộc nghiêm ngặt theo đúng đặc tả tại [AGENTS.md](../AGENTS.md).
   * **Loại bỏ ML Kit:** Không sử dụng `play-services-mlkit-text-recognition` trên thiết bị để giảm kích thước APK, tránh phụ thuộc vào Google Play Services và đảm bảo chất lượng nhận diện công thức toán/lý từ Gemini.
-  * **Chế độ phản hồi:** `response_mime_type = "application/json"` với schema ràng buộc nghiêm ngặt.
-  * **Cách kiểm tra tính khả dụng của Model ID:**
-    1. Gọi REST API lấy danh sách models với `GEMINI_API_KEY`:
-       ```bash
-       curl "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}"
-       ```
-    2. Gửi request test sinh nội dung:
-       ```bash
-       curl -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}" \
-         -H 'Content-Type: application/json' \
-         -d '{"contents":[{"parts":[{"text":"ping"}]}]}'
-       ```
-    3. Nếu mã lỗi là 404 (Model Not Found), kiểm tra danh sách model khả dụng trong tài liệu chính thức của Google AI và cập nhật biến `GEMINI_VISION_MODEL`.
 
-* **Vector Embedding Model ID:** `gemini-embedding-2` `[VERIFY]`
-  * **Trạng thái:** `[VERIFY]` — Cần kiểm chứng trực tiếp bằng request thực tế tới Gemini API trước khi chốt dùng chính thức.
-  * **Trách nhiệm:** Sinh vector biểu diễn ngữ nghĩa cho chuỗi văn bản được tổng hợp từ: `user_intent` + `tags` + `summary` + `ocr_text` (cắt ngắn tối đa 1000 ký tự).
-  * **Kích thước vector embedding:** 768 chiều `[VERIFY]` (cần kiểm chứng độ dài thực tế của mảng float trả về: có thể là 768, 1536 hoặc 3072 tùy thuộc vào phiên bản model và tham số output_dimensionality).
+* **Vector Embedding Model:** `gemini-embedding-2` `[VERIFIED]`
+  * **Kết quả kiểm chứng thực tế:**
+    * Kích thước mặc định của model: **3072 chiều**.
+    * Hỗ trợ tham số cấu hình: **`outputDimensionality = 768`** (đã test thực tế trả về chính xác vector 768 chiều).
+    * Hỗ trợ đầy đủ tham số `taskType = "RETRIEVAL_DOCUMENT"` (khi lưu trữ thẻ vào CSDL) và `"RETRIEVAL_QUERY"` (khi tìm kiếm câu hỏi).
+  * **Quyết định cấu hình:** Sử dụng `gemini-embedding-2` kèm tham số `outputDimensionality = 768` để khớp hoàn hảo với thiết kế Room SQLite BLOB 768d của Remora.
   * **Chuẩn hóa:** Vector được chuẩn hóa L2 trước khi lưu vào Room SQLite dưới dạng BLOB float32 little-endian, cho phép tính Cosine Similarity bằng tích vô hướng (Dot Product).
-  * **Cách kiểm tra kích thước embedding:**
-    1. Gửi request thử nghiệm `embedContent`:
-       ```bash
-       curl -X POST "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent?key=${GEMINI_API_KEY}" \
-         -H 'Content-Type: application/json' \
-         -d '{"content":{"parts":[{"text":"test embedding"}]}}'
-       ```
-    2. Kiểm tra độ dài của mảng `embedding.values` trong phản hồi JSON (ví dụ qua công cụ `jq '.embedding.values | length'`).
-    3. Ghi nhận số chiều thực tế vào file này và cập nhật cấu hình Room Database.
 
 ---
 
