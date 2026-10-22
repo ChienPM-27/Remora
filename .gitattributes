@@ -1,0 +1,23 @@
+# Set default behaviour to automatically normalize line endings
+* text=auto
+
+# Scripts and source files with LF line endings
+*.sh text eol=lf
+gradlew text eol=lf
+*.js text eol=lf
+*.kt text eol=lf
+*.kts text eol=lf
+*.md text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+
+# Batch files with CRLF line endings
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.jar binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.docx binary
