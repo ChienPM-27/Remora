@@ -23,8 +23,8 @@ rootProject.name = "Remora"
 
 // Active modules for MVP development
 include(":core:model")
+include(":app")
 // Postponed modules - uncomment when directory is created:
-// include(":app")
 // include(":core:database")
 // include(":core:ai")
 // include(":feature:capture")

@@ -3,6 +3,7 @@ package com.remora.core.model.fake
 import com.remora.core.model.contract.TextEmbedder
 import com.remora.core.model.contract.VisionAnalysisResult
 import com.remora.core.model.contract.VisionAnalyzer
+import com.remora.core.model.entity.CardTags
 import com.remora.core.model.entity.ContentType
 import kotlinx.coroutines.delay
 import java.util.Random
@@ -22,8 +23,7 @@ class FakeVisionAnalyzer(
             VisionAnalysisResult(
                 title = "Slide: Phân phối nhị thức & Poisson",
                 summary = "Định nghĩa phân phối nhị thức B(n, p), công thức tính xác suất Bernoulli và điều kiện xấp xỉ Poisson khi n lớn, p nhỏ.",
-                subject = "Xác Suất Thống Kê",
-                tags = listOf("XSTK", "NhịThức", "Poisson", "CôngThức"),
+                tags = CardTags(subject = "Xác Suất Thống Kê", topics = listOf("XSTK", "NhịThức", "Poisson", "CôngThức")),
                 contentType = ContentType.THEORY,
                 ocrText = "Chương 2: Các quy luật phân phối xác suất rời rạc. 1. Phân phối Bernoulli. 2. Phân phối Nhị thức B(n, p). P(X=k) = C_n^k * p^k * (1-p)^(n-k)."
             )

@@ -150,3 +150,26 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - Cập nhật ADR 0003, ADR 0001, ADR 0004, `runbook-ec2.md`, `07-scalability-and-cost.md`, `environments.md`: chốt AWS EC2 `t3.medium` (4GB RAM) làm hạ tầng chính thức cho buổi demo; `t3.small` (2GB RAM) là phương án dự phòng.
 * **Cập nhật Trạng thái Tài liệu:**
   - Cập nhật `last_verified: 2026-10-22` và chuyển trạng thái `status: ACCEPTED` cho các tài liệu kiến trúc đã được kiểm chứng thực tế.
+
+---
+
+## 6. Quyết định về Cấu hình Android & Môi trường Thử nghiệm (2026-10-22)
+
+* **Cấu hình SDK:**
+  - `applicationId = com.remora`
+  - `minSdk = 28` (Android 9.0 Pie)
+  - `targetSdk = 34` (Android 14)
+  - `compileSdk = 35` (Yêu cầu bắt buộc từ AndroidX WorkManager 2.10.0 và Core-KTX 1.15.0).
+* **Quản trị Dependency & Kiến trúc:**
+  - Giữ vững Manual DI Container (`AppContainer.kt`) theo working agreement, không dùng Hilt trong MVP.
+  - Tích hợp Room KSP, Jetpack Compose Material 3, WorkManager, OkHttp/Retrofit Serialization.
+* **Xác nhận Kiểm thử Thực tế trên Emulator & Thiết bị:**
+  - Đã khởi chạy và kiểm thử trực tiếp trên giả lập Android `Medium_Phone_API_37.0` (Android API 37.0).
+  - Đã xuất bản và lưu trữ ảnh chụp bằng chứng kiểm thử giao diện tại `docs/evidence/`:
+    - `screenshot_emulator.png`: Màn hình cam kết bảo mật & quyền riêng tư học tập (`ConsentScreen`).
+    - `screenshot_gallery.png`: Kho thẻ nhớ hiển thị các thẻ bài giảng đã pre-seed.
+    - `screenshot_card_detail.png`: Dialog xem chi tiết bài học (tiêu đề, thẻ môn học, tóm tắt AI, OCR text verbatim).
+    - `screenshot_search.png` & `screenshot_search_empty.png`: Giao diện tìm kiếm ngữ nghĩa tự nhiên tiếng Việt và xử lý trường hợp không có kết quả phù hợp.
+* **Tính Tiên quyết cho Buổi Demo (Demo Determinism):**
+  - Cơ chế `DemoDataSeeder.kt` tự động nạp 7 thẻ bài giảng chuẩn (Toán Pythagoras, Thales, Xác suất thống kê Gauss, Chuẩn hóa Z-Score, Vật lý Định luật 2 Newton, Thuật toán Tìm kiếm nhị phân) kèm vector 768 chiều L2-normalized ngay khi ứng dụng mở lần đầu. Đảm bảo hoạt động offline 100% không phụ thuộc mạng trong suốt bài thuyết trình trước ban giám khảo.
+

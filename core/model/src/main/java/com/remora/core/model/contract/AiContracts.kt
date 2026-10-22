@@ -1,5 +1,6 @@
 package com.remora.core.model.contract
 
+import com.remora.core.model.entity.CardTags
 import com.remora.core.model.entity.ContentType
 import kotlinx.serialization.Serializable
 
@@ -7,8 +8,7 @@ import kotlinx.serialization.Serializable
 data class VisionAnalysisResult(
     val title: String,
     val summary: String,
-    val subject: String,
-    val tags: List<String>,
+    val tags: CardTags,
     val contentType: ContentType,
     val ocrText: String
 )

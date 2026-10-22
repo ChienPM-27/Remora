@@ -30,6 +30,18 @@ object VectorMath {
     }
 
     /**
+     * Tính Dot Product giữa 2 vector FloatArray (với vector đã L2-normalized thì dotProduct == cosineSimilarity)
+     */
+    fun dotProduct(v1: FloatArray, v2: FloatArray): Float {
+        if (v1.size != v2.size || v1.isEmpty()) return 0f
+        var dot = 0f
+        for (i in v1.indices) {
+            dot += v1[i] * v2[i]
+        }
+        return dot
+    }
+
+    /**
      * Chuyển FloatArray thành ByteArray (dùng để lưu vào SQLite Room dạng BLOB)
      */
     fun toByteArray(floats: FloatArray): ByteArray {

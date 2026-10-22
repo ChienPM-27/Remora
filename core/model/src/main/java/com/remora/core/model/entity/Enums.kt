@@ -4,10 +4,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class ProcessingStatus {
-    PENDING,          // Vừa chụp, đang chờ xử lý
-    MLKIT_OCR_DONE,   // Đã xong OCR nhanh trên máy (hiện thẻ ngay lập tức)
-    GEMINI_ANALYZED,  // Đã phân tích xong qua Gemini (tóm tắt, môn học, tag)
-    READY,            // Đã embed vector và sẵn sàng tìm kiếm / resurface
+    PENDING,          // Vừa tạo, đang chờ xử lý AI ngầm
+    DONE,             // Đã trích xuất thông tin và vector embedding thành công
     FAILED            // Xử lý gặp lỗi (cho phép người dùng bấm thử lại)
 }
 
@@ -19,4 +17,19 @@ enum class ContentType {
     CODE,        // Đoạn mã nguồn / Lập trình
     NOTES,       // Ghi chú viết tay / Bảng viết
     UNKNOWN      // Chưa xác định
+}
+
+@Serializable
+enum class ResurfaceGroup {
+    SIMILAR,         // Tương đồng (ôn tập củng cố)
+    COMPLEMENTARY,   // Bổ trợ (lý thuyết - bài tập, liên môn)
+    ACTIONABLE       // Cần hành động (phát hiện mâu thuẫn, bài tập cần làm)
+}
+
+@Serializable
+enum class ResurfaceRelation {
+    DUPLICATE,       // Trùng lặp nội dung
+    SUPPLEMENT,      // Bổ sung kiến thức còn thiếu
+    EXPLANATION,     // Giải thích lý do hoặc chứng minh
+    CONTRADICTION    // Mâu thuẫn giả định hoặc đối nghịch
 }
