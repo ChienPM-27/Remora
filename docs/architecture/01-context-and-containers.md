@@ -132,4 +132,4 @@ flowchart TB
    - `SIMILAR` (Tương đồng: cùng chủ đề/dạng bài).
    - `COMPLEMENTARY` (Bổ trợ: lý thuyết cho bài tập hoặc ngược lại).
    - `ACTIONABLE` (Có giá trị sử dụng: công thức/mẫu giải có thể áp dụng ngay).
-4. Client nhận kết quả, lọc theo ngưỡng tin cậy (`confidence_score >= threshold`), lưu vào bảng Room `resurfacing_result` và hiển thị thông báo gợi nhớ cho sinh viên.
+4. Client nhận kết quả, lọc theo ngưỡng tin cậy (`confidence > RESURFACE_MIN_CONFIDENCE`, tạm đặt 0.80 và dùng điều kiện `>`), lưu vào bảng Room `resurfacing_result` và hiển thị thông báo gợi nhớ cho sinh viên.

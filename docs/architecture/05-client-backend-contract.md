@@ -108,4 +108,9 @@ Khi client gọi endpoint `/v1/ai/resurface-batch`:
 3. **Danh sách rỗng hợp lệ (Empty Results is Valid):**
    Nếu không có ứng viên nào đạt ngưỡng tin cậy, backend trả về `"results": []`. Client chấp nhận danh sách rỗng là kết quả hợp lệ, không coi đây là lỗi.
 4. **Ngưỡng tin cậy cấu hình được (`RESURFACE_MIN_CONFIDENCE`) `[PLANNED]`:**
-   Client chỉ lưu và hiển thị gợi ý nếu `confidence >= RESURFACE_MIN_CONFIDENCE`. Giá trị mặc định ban đầu là `0.70`, được cấu hình linh hoạt trong cài đặt hoặc build config để tinh chỉnh tối ưu dựa trên dữ liệu thực tế của bộ ảnh demo.
+   Client chỉ lưu và hiển thị gợi ý nếu `confidence > RESURFACE_MIN_CONFIDENCE`. Giá trị mặc định ban đầu là `0.80` (sử dụng điều kiện `>` thay vì `>=`), được cấu hình linh hoạt trong cài đặt hoặc build config để tinh chỉnh tối ưu dựa trên dữ liệu thực tế của bộ ảnh demo.
+5. **Khớp nhóm và quan hệ (Relation-Group Conformance):**
+   Mô hình AI chỉ trả về gợi ý khi có lợi ích học tập cụ thể, trong đó `relation` phải khớp chính xác với `group`:
+   - `SIMILAR`: `relation` bắt buộc là `DUPLICATE` hoặc `SUPPLEMENT`.
+   - `COMPLEMENTARY`: `relation` bắt buộc là `EXPLANATION` hoặc `SUPPLEMENT`.
+   - `ACTIONABLE`: `relation` bắt buộc là `SUPPLEMENT` hoặc `CONTRADICTION`.

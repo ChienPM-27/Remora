@@ -46,7 +46,7 @@ Các cuộc gọi Gemini API là nguồn chi phí biến đổi chính của h�
    - `DEMO_DAILY_QUOTA`: Hạn ngạch phân tích thẻ/ngày (Mặc định `50` cho tài khoản demo, `500` cho tài khoản pre-seed).
    - `LOGIN_RATE_LIMIT_PER_MIN`: Giới hạn lượt đăng nhập demo (Mặc định `5` req/min/IP cho staging, nâng lên `25` khi dùng 4G Hotspot chung).
    - `OCR_EMBED_MAX_CHARS`: Giới hạn ký tự OCR tối đa khi ghép chuỗi vector embedding (Mặc định `1000` ký tự).
-   - `RESURFACE_MIN_CONFIDENCE`: Ngưỡng độ tin cậy tối thiểu để lưu gợi nhớ Resurfacing (Mặc định `0.70`).
+   - `RESURFACE_MIN_CONFIDENCE`: Ngưỡng độ tin cậy tối thiểu để lưu gợi nhớ Resurfacing (Mặc định `0.80`, áp dụng điều kiện `>`).
 
 ---
 

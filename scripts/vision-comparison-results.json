@@ -1,0 +1,403 @@
+[
+  {
+    "file": "01_math_pythagoras.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "HÌNH HỌC 8: ĐỊNH LÝ PYTHAGORAS",
+        "summary": "Tóm tắt lý thuyết về định lý Pythagoras thuận, ví dụ minh họa và định lý Pythagoras đảo trong chương trình Hình học lớp 8.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Mathematics",
+          "topics": [
+            "Geometry",
+            "Pythagoras Theorem",
+            "Grade 8"
+          ]
+        },
+        "ocr_text": "HINH HOC 8: DINH LY PYTHAGORAS\n\n1. Dinh ly Thuan:\nTrong tam giac vuong, binh phuong canh huyen bang tong binh phuong hai canh goc vuong.\nCong thuc: a^2 + b^2 = c^2 (voi c la canh huyen).\n\n2. Vi du:\nTam giac ABC vuong tai A co AB = 3cm, AC = 4cm.\nBC^2 = 3^2 + 4^2 = 25 => BC = 5cm.\n\n3. Dinh ly Dao:\nNeu a^2 + b^2 = c^2 thi tam giac vuong tai dinh doi dien canh c."
+      },
+      "latency": 5218
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "HINH HOC 8: DINH LY PYTHAGORAS",
+        "summary": "Nội dung bài học Hình học 8 về Định lý Pythagoras bao gồm định lý thuận, công thức a^2 + b^2 = c^2, ví dụ tính độ dài cạnh huyền tam giác vuông, và định lý đảo.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Mathematics",
+          "topics": [
+            "Hinh hoc 8",
+            "Dinh ly Pythagoras",
+            "Tam giac vuong"
+          ]
+        },
+        "ocr_text": "HINH HOC 8: DINH LY PYTHAGORAS\\n\\n1. Dinh ly Thuan:\\nTrong tam giac vuong, binh phuong canh huyen bang tong binh phuong hai canh goc vuong.\\nCong thuc: a^2 + b^2 = c^2 (voi c la canh huyen).\\n\\n2. Vi du:\\nTam giac ABC vuong tai A co AB = 3cm, AC = 4cm.\\nBC^2 = 3^2 + 4^2 = 25 => BC = 5cm.\\n\\n3. Dinh ly Dao:\\nNeu a^2 + b^2 = c^2 thi tam giac vuong tai dinh doi dien canh c."
+      },
+      "latency": 8158
+    }
+  },
+  {
+    "file": "02_math_thales.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "HINH HOC 8: DINH LY THALES",
+        "summary": "Tom tat ve Dinh ly Thales va He qua Thales trong hinh hoc lop 8, bao gom noi dung dinh ly, gia thiet va cac he thuc ti le.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Mathematics",
+          "topics": [
+            "Geometry",
+            "Thales Theorem",
+            "Grade 8 Geometry"
+          ]
+        },
+        "ocr_text": "HINH HOC 8: DINH LY THALES\n\n1. Dinh ly Thales:\nNeu mot duong thang song song voi mot canh cua tam giac va cat hai canh con lai thi no dinh ra tren hai canh do nhung doan thang tuong ung ti le.\nTam giac ABC, duong thang d // BC cat AB tai D, AC tai E.\n=> AD/AB = AE/AC ; AD/DB = AE/EC.\n\n2. He qua Thales:\nAD/AB = AE/AC = DE/BC (tao ra tam giac moi dong dang tam giac ban dau)."
+      },
+      "latency": 3807
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "Hình học 8: Định lý Thales",
+        "summary": "Trình bày lý thuyết Định lý Thales và hệ quả của Định lý Thales trong hình học lớp 8.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Toán học",
+          "topics": [
+            "Hình học 8",
+            "Định lý Thales",
+            "Hệ quả Thales"
+          ]
+        },
+        "ocr_text": "HINH HOC 8: DINH LY THALES\n\n1. Dinh ly Thales:\nNeu mot duong thang song song voi mot canh cua tam giac va cat hai canh con lai thi no dinh ra tren hai canh do nhung doan thang tuong ung ti le.\nTam giac ABC, duong thang d // BC cat AB tai D, AC tai E.\n=> AD/AB = AE/AC ; AD/DB = AE/EC.\n\n2. He qua Thales:\nAD/AB = AE/AC = DE/BC (tao ra tam giac moi dong dang tam giac ban dau)."
+      },
+      "latency": 5885
+    }
+  },
+  {
+    "file": "03_physics_newton2.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "Vat ly 10: Dinh luat II Newton",
+        "summary": "Tom tat ve dinh luat II Newton, cong thuc tinh gia toc, truong hop nhieu luc va truong hop vat truot co ma sat tren san ngang.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Vat ly",
+          "topics": [
+            "Dinh luat II Newton",
+            "Dong luc hoc",
+            "Gia toc"
+          ]
+        },
+        "ocr_text": "VAT LY 10: DINH LUAT II NEWTON\n\n1. Phat bieu:\nGia toc cua mot vat cung huong voi luc tac dung. Do lon gia toc ti le thuan voi luc va ti le nghich voi khoi luong.\nCong thuc: F = m * a => a = F / m.\n\n2. Truong hop nhieu luc:\nF_hl = F1 + F2 = m * a.\n\n3. Vat truot co ma sat tren san ngang:\nF_keo - F_ms = m * a (F_ms = mu * m * g)\n=> a = (F_keo - mu * m * g) / m."
+      },
+      "latency": 3963
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "VAT LY 10: DINH LUAT II NEWTON",
+        "summary": "Lý thuyết về Định luật II Newton trong môn Vật lý 10 bao gồm phát biểu định luật, công thức cơ bản, trường hợp có nhiều lực tác dụng và trường hợp vật trượt có lực ma sát trên mặt sàn nằm ngang.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Vật lý",
+          "topics": [
+            "Vật lý 10",
+            "Định luật II Newton",
+            "Lực ma sát",
+            "Công thức vật lý"
+          ]
+        },
+        "ocr_text": "VAT LY 10: DINH LUAT II NEWTON\n\n1. Phat bieu:\nGia toc cua mot vat cung huong voi luc tac dung. Do lon gia toc ti le thuan voi luc va ti le nghich voi khoi luong.\nCong thuc: F = m * a => a = F / m.\n\n2. Truong hop nhieu luc:\nF_hl = F1 + F2 = m * a.\n\n3. Vat truot co ma sat tren san ngang:\nF_keo - F_ms = m * a (F_ms = mu * m * g)\n=> a = (F_keo - mu * m * g) / m."
+      },
+      "latency": 7541
+    }
+  },
+  {
+    "file": "04_calculus_derivative.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "GIAI TICH 12: BANG DAO HAM CO BAN",
+        "summary": "Bang dao ham co ban va dao ham ham hop cho mon Giai tich lop 12.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Toan hoc",
+          "topics": [
+            "Giai tich",
+            "Dao ham",
+            "Bang dao ham"
+          ]
+        },
+        "ocr_text": "GIAI TICH 12: BANG DAO HAM CO BAN\n\n1. Dao ham co ban:\n(c)' = 0\n(x^n)' = n * x^(n-1)\n(1/x)' = -1 / x^2\n(sqrt(x))' = 1 / (2*sqrt(x))\n(sin x)' = cos x ; (cos x)' = -sin x\n(e^x)' = e^x ; (ln x)' = 1/x\n\n2. Dao ham ham hop y = f(u(x)):\n(u^n)' = n * u^(n-1) * u'\n(sqrt(u))' = u' / (2*sqrt(u))\n(e^u)' = u' * e^u."
+      },
+      "latency": 9564
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "GIAI TICH 12: BANG DAO HAM CO BAN",
+        "summary": "Tổng hợp các công thức đạo hàm cơ bản và đạo hàm của hàm hợp trong chương trình Giải tích 12.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Mathematics",
+          "topics": [
+            "Giải tích 12",
+            "Đạo hàm",
+            "Công thức đạo hàm"
+          ]
+        },
+        "ocr_text": "GIAI TICH 12: BANG DAO HAM CO BAN 1. Dao ham co ban: (c)' = 0 (x^n)' = n * x^(n-1) (1/x)' = -1 / x^2 (sqrt(x))' = 1 / (2*sqrt(x)) (sin x)' = cos x ; (cos x)' = -sin x (e^x)' = e^x ; (ln x)' = 1/x 2. Dao ham ham hop y = f(u(x)): (u^n)' = n * u^(n-1) * u' (sqrt(u))' = u' / (2*sqrt(u)) (e^u)' = u' * e^u."
+      },
+      "latency": 7880
+    }
+  },
+  {
+    "file": "05_prob_normal_dist.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "XAC SUAT THONG KE: PHAN PHOI CHUAN",
+        "summary": "Tom tat ve phan phoi chuan, ham mat do xac suat, ky vong, phuong sai, bien doi Z-Score, cong thuc tinh xac suat va quy tac 68-95-99.7.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Xac suat Thong ke",
+          "topics": [
+            "Phan phoi chuan",
+            "Ham mat do xac suat",
+            "Z-Score",
+            "Quy tac 68-95-99.7"
+          ]
+        },
+        "ocr_text": "XAC SUAT THONG KE: PHAN PHOI CHUAN\n\n1. Ham mat do xac suat X ~ N(mu, sigma^2):\nf(x) = (1 / (sigma * sqrt(2*pi))) * e^[ - (x - mu)^2 / (2*sigma^2) ]\nE(X) = mu, Var(X) = sigma^2.\n\n2. Bien doi Z-Score:\nZ = (X - mu) / sigma => Z ~ N(0, 1).\n\n3. Xac suat: P(a < X < b) = Phi((b-mu)/sigma) - Phi((a-mu)/sigma).\nQuy tac 68-95-99.7: P(mu - sigma < X < mu + sigma) = 68.26%."
+      },
+      "latency": 3099
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "XÁC SUẤT THỐNG KÊ: PHÂN PHỐI CHUẨN",
+        "summary": "Tóm tắt công thức lý thuyết về phân phối chuẩn (Normal Distribution), hàm mật độ xác suất, biến đổi Z-score, cách tính xác suất và quy tắc 68-95-99.7.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Xác suất thống kê",
+          "topics": [
+            "Phân phối chuẩn",
+            "Z-Score",
+            "Quy tắc 68-95-99.7"
+          ]
+        },
+        "ocr_text": "XAC SUAT THONG KE: PHAN PHOI CHUAN\\n\\n1. Ham mat do xac suat X ~ N(mu, sigma^2):\\nf(x) = (1 / (sigma * sqrt(2*pi))) * e^[ -(x - mu)^2 / (2*sigma^2) ]\\nE(X) = mu, Var(X) = sigma^2.\\n\\n2. Bien doi Z-Score:\\nZ = (X - mu) / sigma => Z ~ N(0, 1).\\n\\n3. Xac suat: P(a < X < b) = Phi((b-mu)/sigma) - Phi((a-mu)/sigma).\\nQuy tac 68-95-99.7: P(mu - sigma < X < mu + sigma) = 68.26%."
+      },
+      "latency": 8434
+    }
+  },
+  {
+    "file": "06_cs_binary_search.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "THUAT TOAN: TIM KIEM NHI PHAN",
+        "summary": "Huong dan ve thuat toan Tim kiem nhi phan (Binary Search) tren mang da sap xep, bao gom nguyen ly hoat dong, do phuc tap va ma nguon Kotlin.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Khoa hoc may tinh",
+          "topics": [
+            "Thuat toan",
+            "Tim kiem nhi phan",
+            "Cau truc du lieu va giai thuat",
+            "Kotlin"
+          ]
+        },
+        "ocr_text": "THUAT TOAN: TIM KIEM NHI PHAN\n\n1. Binary Search tren mang DA SAP XEP:\nSo sanh target voi phan tu o giua arr[mid].\n- target == arr[mid] -> return mid\n- target < arr[mid] -> high = mid - 1\n- target > arr[mid] -> low = mid + 1\n\n2. Do phuc tap: O(log N) thoi gian, O(1) bo nho.\n\n3. Kotlin code:\nfun binarySearch(arr: IntArray, target: Int): Int {\n    var l = 0; var r = arr.size - 1\n    while (l <= r) {\n        val m = (l + r) ushr 1\n        if (arr[m] == target) return m\n        if (arr[m] < target) l = m + 1 else r = m - 1\n    }\n    return -1\n}"
+      },
+      "latency": 2536
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "THUAT TOAN: TIM KIEM NHI PHAN",
+        "summary": "Tài liệu lý thuyết về thuật toán tìm kiếm nhị phân (Binary Search) trên mảng đã sắp xếp, bao gồm các bước so sánh, độ phức tạp thời gian/bộ nhớ và đoạn mã triển khai bằng ngôn ngữ Kotlin.",
+        "content_type": "CODE",
+        "tags": {
+          "subject": "Lap trinh",
+          "topics": [
+            "Binary Search",
+            "Thuat toan",
+            "Kotlin"
+          ]
+        },
+        "ocr_text": "THUAT TOAN: TIM KIEM NHI PHAN\n\n1. Binary Search tren mang DA SAP XEP:\nSo sanh target voi phan tu o giua arr[mid].\n- target == arr[mid] -> return mid\n- target < arr[mid] -> high = mid - 1\n- target > arr[mid] -> low = mid + 1\n\n2. Do phuc tap: O(log N) thoi gian, O(1) bo nho.\n\n3. Kotlin code:\nfun binarySearch(arr: IntArray, target: Int): Int {\n    var l = 0; var r = arr.size - 1\n    while (l <= r) {\n        val m = (l + r) ushr 1\n        if (arr[m] == target) return m\n        if (arr[m] < target) l = m + 1 else r = m - 1\n    }\n    return -1\n}"
+      },
+      "latency": 9923
+    }
+  },
+  {
+    "file": "07_chem_periodic_law.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "Hoa Hoc 10: Dinh Luat Tuan Hoan",
+        "summary": "Tom tat ve dinh luat tuan hoan Men-de-le-ep va quy luat bien doi tinh chat trong chu ky va nhom A cua cac nguyen to hoa hoc.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Chemistry",
+          "topics": [
+            "Dinh luat tuan hoan",
+            "Ban kinh nguyen tu",
+            "Do am dien",
+            "Tinh kim loai va phi kim"
+          ]
+        },
+        "ocr_text": "HOA HOC 10: DINH LUAT TUAN HOAN\n\n1. Dinh luat Men-de-le-ep:\nTinh chat cac don chat va hop chat bien doi tuan hoan theo chieu tang dien tich hat nhan nguyen tu.\n\n2. Quy luat trong mot Chu ky (trai sang phai):\n- Ban kinh nguyen tu: GIAM DAN\n- Do am dien: TANG DAN\n- Tinh kim loai GIAM, tinh phi kim TANG.\n\n3. Quy luat trong Nhom A (tren xuong duoi):\n- Ban kinh nguyen tu: TANG DAN\n- Tinh kim loai TANG, tinh phi kim GIAM."
+      },
+      "latency": 2979
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "HOA HOC 10: DINH LUAT TUAN HOAN",
+        "summary": "Tóm tắt Định luật tuần hoàn Mendeleev và các quy luật biến đổi tính chất (bán kính nguyên tử, độ âm điện, tính kim loại - phi kim) trong chu kỳ và nhóm A.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Hóa học",
+          "topics": [
+            "Định luật tuần hoàn",
+            "Chu kỳ",
+            "Nhóm A",
+            "Tính chất hóa học"
+          ]
+        },
+        "ocr_text": "HOA HOC 10: DINH LUAT TUAN HOAN\n\n1. Dinh luat Men-de-le-ep:\nTinh chat cac don chat va hop chat bien doi tuan hoan theo chieu tang dien tich hat nhan nguyen tu.\n\n2. Quy luat trong mot Chu ky (trai sang phai):\n- Ban kinh nguyen tu: GIAM DAN\n- Do am dien: TANG DAN\n- Tinh kim loai GIAM, tinh phi kim TANG.\n\n3. Quy luat trong Nhom A (tren xuong duoi):\n- Ban kinh nguyen tu: TANG DAN\n- Tinh kim loai TANG, tinh phi kim GIAM."
+      },
+      "latency": 8658
+    }
+  },
+  {
+    "file": "08_cs_quicksort.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "THUAT TOAN: QUICKSORT (SAP XEP NHANH)",
+        "summary": "Tom tat ve thuat toan QuickSort bao gom nguyen ly Chia de tri, do phuc tap thoi gian va ma gia (pseudocode).",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Khoa hoc may tinh",
+          "topics": [
+            "Thuat toan",
+            "Sap xep",
+            "QuickSort",
+            "Chia de tri"
+          ]
+        },
+        "ocr_text": "THUAT TOAN: QUICKSORT (SAP XEP NHANH)\n\n1. Nguyen ly Chia de tri (Divide and Conquer):\n- Chon phan tu chot (pivot).\n- Phan hoach: mang con trai <= pivot, mang con phai > pivot.\n- De quy QuickSort cho hai mang con.\n\n2. Do phuc tap thoi gian:\n- Trung binh: O(N log N)\n- Tot nhat: O(N log N)\n- Xau nhat (chot cuc doan): O(N^2)\n\n3. Pseudocode:\nquicksort(A, lo, hi):\n    if lo < hi:\n        p = partition(A, lo, hi)\n        quicksort(A, lo, p - 1)\n        quicksort(A, p + 1, hi)"
+      },
+      "latency": 2399
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "THUAT TOAN: QUICKSORT (SAP XEP NHANH)",
+        "summary": "Tóm tắt lý thuyết về thuật toán QuickSort bao gồm nguyên lý Chia để trị (Divide and Conquer), độ phức tạp thời gian trong các trường hợp, và mã giả (pseudocode).",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Khoa học máy tính",
+          "topics": [
+            "Thuật toán",
+            "Sắp xếp",
+            "QuickSort",
+            "Cấu trúc dữ liệu và giải thuật"
+          ]
+        },
+        "ocr_text": "THUAT TOAN: QUICKSORT (SAP XEP NHANH)\n\n1. Nguyen ly Chia de tri (Divide and Conquer):\n- Chon phan tu chot (pivot).\n- Phan hoach: mang con trai <= pivot, mang con phai > pivot.\n- De quy QuickSort cho hai mang con.\n\n2. Do phuc tap thoi gian:\n- Trung binh: O(N log N)\n- Tot nhat: O(N log N)\n- Xau nhat (chot cuc doan): O(N^2)\n\n3. Pseudocode:\nquicksort(A, lo, hi):\n    if lo < hi:\n        p = partition(A, lo, hi)\n        quicksort(A, lo, p - 1)\n        quicksort(A, p + 1, hi)"
+      },
+      "latency": 8312
+    }
+  },
+  {
+    "file": "09_algebra_matrix.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "DAI SO TUYEN TINH: MA TRAN VA DINH THUC",
+        "summary": "Tai lieu tom tắt kiến thức cơ bản về đại số tuyến tính bao gồm phép nhân ma trận, định thức ma trận cấp 2 và điều kiện ma trận khả nghịch.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Toán cao cấp",
+          "topics": [
+            "Đại số tuyến tính",
+            "Ma trận",
+            "Định thức",
+            "Ma trận khả nghịch"
+          ]
+        },
+        "ocr_text": "DAI SO TUYEN TINH: MA TRAN VA DINH THUC\n\n1. Phep nhan ma tran:\nMa tran A cap (m x k) nhan ma tran B cap (k x n) duoc C cap (m x n).\nPhan tu: c_ij = sum_{r=1..k} (a_ir * b_rj).\nChu y: A * B != B * A (khong giao hoan).\n\n2. Dinh thuc ma tran cap 2:\ndet([a, b; c, d]) = a*d - b*c.\n\n3. Dieu kien ma tran kha nghich:\nMa tran vuong A kha nghich <=> det(A) != 0.\nA^(-1) = (1 / det(A)) * C_adj."
+      },
+      "latency": 3860
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "DAI SO TUYEN TINH: MA TRAN VA DINH THUC",
+        "summary": "Tóm tắt các kiến thức cơ bản về phép nhân ma trận, định thức ma trận cấp 2 và điều kiện ma trận khả nghịch.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Toán học",
+          "topics": [
+            "Đại số tuyến tính",
+            "Ma trận",
+            "Định thức",
+            "Ma trận khả nghịch"
+          ]
+        },
+        "ocr_text": "DAI SO TUYEN TINH: MA TRAN VA DINH THUC\n\n1. Phep nhan ma tran:\nMa tran A cap (m x k) nhan ma tran B cap (k x n) duoc C cap (m x n).\nPhan tu: c_ij = sum_{r=1..k} (a_ir * b_rj).\nChu y: A * B != B * A (khong giao hoan).\n\n2. Dinh thuc ma tran cap 2:\ndet([a, b; c, d]) = a*d - b*c.\n\n3. Dieu kien ma tran kha nghich:\nMa tran vuong A kha nghich <=> det(A) != 0.\nA^(-1) = (1 / det(A)) * C_adj."
+      },
+      "latency": 7032
+    }
+  },
+  {
+    "file": "10_biology_dna.png",
+    "lite": {
+      "success": true,
+      "parsed": {
+        "title": "SINH HOC 10: CAU TRUC ADN XOAN KEP",
+        "summary": "Tom tat kien thuc ve cau truc ADN xoan kep gom mo hinh Watson - Crick, nguyen tac bo sung va cac cong thuc tinh toan co ban nhu tong so nu, chieu dai va so lien ket hidro.",
+        "content_type": "NOTES",
+        "tags": {
+          "subject": "Sinh hoc",
+          "topics": [
+            "ADN",
+            "Cau truc ADN xoan kep",
+            "Watson - Crick",
+            "Nguyen tac bo sung"
+          ]
+        },
+        "ocr_text": "SINH HOC 10: CAU TRUC ADN XOAN KEP\n\n1. Mo hinh Watson - Crick (1953) :\nADN gom 2 mach polynucleotide xoan deu quanh mot truc.\nDuong kinh: 2nm (20 Angstrom) .\nMoi chu ky xoan dai 3.4nm gom 10 cap nucleotide.\n\n2. Nguyen tac bo sung (NTBS) :\n- A lien ket voi T bang 2 lien ket hidro: A = T.\n- G lien ket voi X bang 3 lien ket hidro: G = 3H = X.\n\n3. Cong thuc can nho:\nTong so nu: N = 2*A + 2*G.\nChieu dai gen: L = (N / 2) * 3.4 Angstrom.\nSo lien ket hidro: H = 2*A + 3*G."
+      },
+      "latency": 2822
+    },
+    "flash": {
+      "success": true,
+      "parsed": {
+        "title": "SINH HOC 10: CAU TRUC ADN XOAN KEP",
+        "summary": "Tổng hợp lý thuyết về mô hình cấu trúc không gian của ADN theo Watson - Crick (1953), nguyên tắc bổ sung và các công thức cơ bản tính tổng số nucleotide, chiều dài gen và số liên kết hydro.",
+        "content_type": "THEORY",
+        "tags": {
+          "subject": "Sinh học",
+          "topics": [
+            "Sinh học 10",
+            "Cấu trúc ADN",
+            "Mô hình Watson - Crick",
+            "Công thức ADN"
+          ]
+        },
+        "ocr_text": "SINH HOC 10: CAU TRUC ADN XOAN KEP\n\n1. Mo hinh Watson - Crick (1953):\nADN gom 2 mach polynucleotide xoan deu quanh mot truc.\nDuong kinh: 2nm (20 Angstrom).\nMoi chu ky xoan dai 3.4nm gom 10 cap nucleotide.\n\n2. Nguyen tac bo sung (NTBS):\n- A lien ket voi T bang 2 lien ket hidro: A = T.\n- G lien ket voi X bang 3 lien ket hidro: G = 3H = X.\n\n3. Cong thuc can nho:\nTong so nu: N = 2*A + 2*G.\nChieu dai gen: L = (N / 2) * 3.4 Angstrom.\nSo lien ket hidro: H = 2*A + 3*G."
+      },
+      "latency": 9631
+    }
+  }
+]

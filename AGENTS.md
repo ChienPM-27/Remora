@@ -28,8 +28,8 @@ Reply to the team in Vietnamese. Code, identifiers, comments and commit messages
 - Room (SQLite), WorkManager
 - Screenshot detection: MediaStore + ContentObserver. If the process dies in the background, fall back to a WorkManager content-URI trigger or a foreground service. Test on the real demo phone.
 - AI: Gemini API behind the backend (`gateway` + `ai-service`, see the Backend block below). The app never holds the real API key.
-  - Vision / card extraction: `gemini-3.5-flash` (verify availability). OCR is done by Gemini in the same call; there is no ML Kit step.
-  - Embeddings: `gemini-embedding-2` (verify; check output dimension and whether query/document task types are supported).
+  - Vision / card extraction: `gemini-3.5-flash-lite` (primary), `gemini-3.5-flash` (fallback). OCR is done by Gemini in the same call; there is no ML Kit step.
+  - Embeddings: `gemini-embedding-2` (output dimension 768, taskType RETRIEVAL_DOCUMENT / RETRIEVAL_QUERY).
   - For extraction calls use JSON mode with a response schema. Use the lowest thinking level that keeps JSON quality, to cut latency (verify the parameter name in the docs).
 - Logging: Timber. Serialization: one library only (kotlinx.serialization unless the team decides otherwise).
 - Vectors: on-device cosine similarity. No external vector database in the MVP.
@@ -85,7 +85,7 @@ Validate after parsing. On missing or invalid fields: keep what is valid, set `t
 {
   "results": [
     {
-      "candidate_id": "must be one of the provided ids",
+      "candidate_id": 101,
       "group": "SIMILAR | COMPLEMENTARY | ACTIONABLE",
       "relation": "DUPLICATE | SUPPLEMENT | EXPLANATION | CONTRADICTION",
       "new_info": "string",
@@ -97,7 +97,14 @@ Validate after parsing. On missing or invalid fields: keep what is valid, set `t
 }
 ```
 
-Rules: at most 2 per group; an empty `results` is valid; drop any `candidate_id` not in the input; drop results below the confidence threshold (tune on the demo set).
+Rules:
+- Chỉ trả khi có lợi ích học tập cụ thể, relation phải khớp group:
+  - `SIMILAR`: relation `DUPLICATE` hoặc `SUPPLEMENT`
+  - `COMPLEMENTARY`: relation `EXPLANATION` hoặc `SUPPLEMENT`
+  - `ACTIONABLE`: relation `SUPPLEMENT` hoặc `CONTRADICTION`
+- `candidate_id` bắt buộc là số nguyên (INTEGER) khớp chính xác danh sách đầu vào; drop mọi `candidate_id` không có trong input.
+- Tối đa 2 kết quả mỗi group; danh sách `results: []` rỗng là hợp lệ khi không có ứng viên liên quan (ca âm tính).
+- Ngưỡng lọc: chỉ nhận kết quả khi `confidence > 0.80` (sử dụng điều kiện `>` thay vì `>=`).
 
 ### Search
 

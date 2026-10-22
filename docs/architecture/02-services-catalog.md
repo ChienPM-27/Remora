@@ -54,7 +54,7 @@ Tài liệu này cung cấp bảng tra cứu toàn diện và thông tin chi ti�
 * **Công nghệ:** Kotlin + Ktor (Netty engine).
 * **Mục đích:** Đóng gói toàn bộ logic tương tác với Google Gemini AI, quản lý prompt theo phiên bản (Prompt Versioning), xác thực JSON Schema trả về và tính toán chi phí token.
 * **Các trách nhiệm chính:**
-  1. **Trích xuất thẻ nhớ (`/v1/ai/extract-card`):** Nhận ảnh nhị phân/base64 và `user_intent`, gọi `gemini-3.5-flash` ở chế độ JSON Structured Output với schema cố định (`title`, `summary`, `tags`, `content_type`, `ocr_text`).
+  1. **Trích xuất thẻ nhớ (`/v1/ai/extract-card`):** Nhận ảnh nhị phân/base64 và `user_intent`, gọi `gemini-3.5-flash-lite` (hoặc fallback sang `gemini-3.5-flash`) ở chế độ JSON Structured Output với schema cố định (`title`, `summary`, `tags`, `content_type`, `ocr_text`).
   2. **Tạo Vector Embedding (`/v1/ai/embeddings`):** Nhận văn bản đã tổng hợp (`user_intent + tags + summary + ocr_text`), gọi `gemini-embedding-2` để nhận vector 768 chiều.
   3. **Đánh giá Memory Resurfacing theo lô (`/v1/ai/resurface-batch`):** Nhận thông tin thẻ mới và danh sách tối đa 15 ứng viên (chỉ text metadata), gọi LLM 1 lần duy nhất để phân loại quan hệ thành 3 nhóm (`SIMILAR`, `COMPLEMENTARY`, `ACTIONABLE`).
   4. **Không lưu trữ nội dung (Stateless):** Tuyệt đối không ghi ảnh hay văn bản người dùng vào ổ đĩa hoặc cơ sở dữ liệu.
@@ -62,7 +62,8 @@ Tài liệu này cung cấp bảng tra cứu toàn diện và thông tin chi ti�
 * **Các biến môi trường bắt buộc:**
   * `PORT=8082`
   * `GEMINI_API_KEY`: Khóa API Google Gemini.
-  * `GEMINI_VISION_MODEL`: Mặc định `gemini-3.5-flash`.
+  * `GEMINI_VISION_MODEL`: Mặc định `gemini-3.5-flash-lite`.
+  * `GEMINI_VISION_FALLBACK_MODEL`: Mặc định `gemini-3.5-flash`.
   * `GEMINI_EMBEDDING_MODEL`: Mặc định `gemini-embedding-2`.
   * `INTERNAL_SERVICE_KEY`: Khóa kiểm tra request đến từ `gateway`.
 

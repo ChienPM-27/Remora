@@ -13,7 +13,7 @@ Dịch vụ nội bộ chuyên trách điều phối và giao tiếp độc quy�
 
 ### Trách nhiệm (Responsibilities):
 * Là dịch vụ **duy nhất nắm giữ `GEMINI_API_KEY`** và thực hiện các cuộc gọi ra Google Gemini API.
-* Trích xuất thẻ học (`/v1/ai/extract-card`): Gọi `gemini-3.5-flash` ở chế độ JSON Structured Output với JSON Schema cố định, đọc OCR văn bản và tạo thẻ.
+* Trích xuất thẻ học (`/v1/ai/extract-card`): Gọi `gemini-3.5-flash-lite` (fallback `gemini-3.5-flash`) ở chế độ JSON Structured Output với JSON Schema cố định, đọc OCR văn bản và tạo thẻ.
 * Sinh vector embeddings (`/v1/ai/embeddings`): Gọi `gemini-embedding-2` để nhận vector 768 chiều.
 * Đánh giá Stage 2 Resurfacing theo lô (`/v1/ai/resurface-batch`): Gom toàn bộ tối đa 15 ứng viên vào đúng 1 prompt duy nhất gửi tới Gemini để phân loại vào 3 nhóm (`SIMILAR`, `COMPLEMENTARY`, `ACTIONABLE`).
 * Kiểm tra header nội bộ `X-Internal-Secret` để ngăn chặn truy cập trái phép.
@@ -32,7 +32,8 @@ Dịch vụ nội bộ chuyên trách điều phối và giao tiếp độc quy�
 | --- | --- | --- | --- | --- |
 | `PORT` | Có | `8082` | Không | Cổng HTTP nội bộ mà service lắng nghe |
 | `GEMINI_API_KEY` | Có | `<YOUR_GEMINI_API_KEY>` | **Có** | Khóa API chính thức của Google Gemini |
-| `GEMINI_VISION_MODEL` | Không | `gemini-3.5-flash` | Không | Model dùng cho Vision OCR & Extraction |
+| `GEMINI_VISION_MODEL` | Không | `gemini-3.5-flash-lite` | Không | Model chính dùng cho Vision OCR & Extraction |
+| `GEMINI_VISION_FALLBACK_MODEL` | Không | `gemini-3.5-flash` | Không | Model dự phòng khi model chính lỗi/quá tải |
 | `GEMINI_EMBEDDING_MODEL`| Không | `gemini-embedding-2` | Không | Model dùng để sinh vector embedding |
 | `INTERNAL_SERVICE_KEY` | Có | `<GENERATE_WITH_OPENSSL_RAND_HEX_32>` | **Có** | Khóa bí mật nội bộ đối chiếu với `gateway` |
 | `GEMINI_TIMEOUT_MS` | Không | `12000` | Không | Giới hạn thời gian chờ phản hồi từ Gemini |
