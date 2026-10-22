@@ -1,0 +1,542 @@
+openapi: 3.1.0
+info:
+  title: Remora API Gateway Contract
+  version: 1.0.0
+  description: Public contract-first specification for Remora API Gateway.
+  contact:
+    name: Remora Engineering Team
+    email: dev@remora.study
+
+servers:
+  - url: https://{domain}/v1
+    description: Production EC2 Environment (via Caddy TLS with <DOMAIN>)
+    variables:
+      domain:
+        default: example.com
+        description: Production domain name or DuckDNS subdomain (<DOMAIN>)
+  - url: http://localhost:8080/v1
+    description: Local Development Environment
+
+tags:
+  - name: Authentication
+    description: Demo user authentication and JWT issuance
+  - name: AI Orchestration
+    description: Vision extraction, embedding generation, and Resurfacing batch evaluation
+  - name: Monitoring
+    description: Health and readiness probes
+
+paths:
+  /auth/login-demo:
+    post:
+      summary: Login with demo credentials
+      description: Authenticates a demo student user using credentials configured via environment variables. Protected by per-IP rate limiting (5 req/min/IP) and provisioned with a small daily AI quota (50 cards/day).
+      operationId: loginDemo
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDemoRequest'
+            example:
+              username: "demo_student_01"
+              password: "password123"
+      responses:
+        '200':
+          description: Successfully authenticated, JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokenResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+
+  /ai/extract-card:
+    post:
+      summary: Extract memory card metadata and OCR text from study screenshot
+      description: Uploads a screenshot image with optional user intent to extract title, summary, tags, content_type, and OCR text via Gemini 3.5 Flash.
+      operationId: extractCard
+      tags:
+        - AI Orchestration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: The compressed JPEG/PNG screenshot image file.
+                user_intent:
+                  type: string
+                  description: Optional note taken by student during capture.
+                  example: "Slide ôn tập thi giữa kỳ"
+          application/json:
+            schema:
+              type: object
+              required:
+                - image_base64
+              properties:
+                image_base64:
+                  type: string
+                  description: Base64-encoded compressed image string.
+                user_intent:
+                  type: string
+                  description: Optional note taken by student during capture.
+                  example: "Slide ôn tập thi giữa kỳ"
+      responses:
+        '200':
+          description: Card extracted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractedCardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+        '504':
+          $ref: '#/components/responses/GatewayTimeoutError'
+
+  /ai/embeddings:
+    post:
+      summary: Generate normalized vector embedding for query or card content
+      description: Generates a 768-dimensional L2-normalized vector embedding using Gemini Embedding 2.
+      operationId: generateEmbedding
+      tags:
+        - AI Orchestration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  description: Text content synthesized from user_intent, tags, summary, and OCR text.
+                  example: "Ôn thi XSTK. Giải tích: Phân phối chuẩn Gauss và bài tập mẫu."
+      responses:
+        '200':
+          description: Embedding vector generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+
+  /ai/resurface-batch:
+    post:
+      summary: Evaluate Stage 2 relationships across candidate cards in a single batch
+      description: Evaluates semantic and logical relationships between a newly saved card and candidate cards in a single batch prompt.
+      operationId: evaluateResurfacingBatch
+      tags:
+        - AI Orchestration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResurfaceBatchRequest'
+      responses:
+        '200':
+          description: Resurfacing relationships evaluated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResurfaceBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsError'
+
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Simple health check probe returning UP when the gateway is running.
+      operationId: livenessCheck
+      tags:
+        - Monitoring
+      security: []
+      responses:
+        '200':
+          description: Service is healthy and alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "UP"
+
+  /readyz:
+    get:
+      summary: Readiness probe
+      description: Comprehensive readiness probe verifying database connectivity and downstream AI service reachability.
+      operationId: readinessCheck
+      tags:
+        - Monitoring
+      security: []
+      responses:
+        '200':
+          description: Service and its downstream dependencies are ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "READY"
+                  database:
+                    type: string
+                    example: "CONNECTED"
+                  ai_service:
+                    type: string
+                    example: "REACHABLE"
+        '503':
+          description: Dependency unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Enter the Bearer token issued by /v1/auth/login-demo
+
+  responses:
+    BadRequestError:
+      description: Invalid request payload
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnauthorizedError:
+      description: Missing, invalid, or expired JWT token
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    TooManyRequestsError:
+      description: Per-user rate limit or daily AI quota exceeded
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Recommended seconds to wait before retrying
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    GatewayTimeoutError:
+      description: Upstream Gemini API call timed out
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+  schemas:
+    LoginDemoRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "demo_student_01"
+        password:
+          type: string
+          example: "password123"
+
+    AuthTokenResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: Signed JWT access token
+        token_type:
+          type: string
+          example: "Bearer"
+        expires_in:
+          type: integer
+          description: Validity in seconds
+          example: 86400
+
+    ExtractedCardResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - summary
+        - tags
+        - content_type
+        - ocr_text
+      properties:
+        title:
+          type: string
+          maxLength: 80
+          example: "Phân phối chuẩn (Gaussian Distribution)"
+        summary:
+          type: string
+          example: "Định nghĩa phân phối Gauss với kỳ vọng mu và phương sai sigma bình phương. Nêu quy tắc 68-95-99.7 trong xác suất thực hành."
+        tags:
+          type: object
+          additionalProperties: false
+          required:
+            - subject
+            - topics
+          properties:
+            subject:
+              type: string
+              example: "Xác suất thống kê"
+            topics:
+              type: array
+              items:
+                type: string
+              example: ["Phân phối Gauss", "Độ lệch chuẩn", "Quy tắc 3-sigma"]
+        content_type:
+          type: string
+          enum:
+            - THEORY
+            - PROBLEM
+            - SOLUTION
+            - CODE
+            - NOTES
+            - UNKNOWN
+          example: "THEORY"
+        ocr_text:
+          type: string
+          description: All readable text extracted from the screenshot
+          example: "Chương 4: Biến ngẫu nhiên liên tục. Phân phối chuẩn N(mu, sigma^2)..."
+
+    EmbeddingResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - embedding
+        - dimension
+      properties:
+        embedding:
+          type: array
+          items:
+            type: number
+            format: float
+          description: L2-normalized float32 embedding vector
+        dimension:
+          type: integer
+          example: 768
+
+    CandidateCardItem:
+      type: object
+      additionalProperties: false
+      required:
+        - candidate_id
+        - title
+        - summary
+        - tags
+        - content_type
+      properties:
+        candidate_id:
+          type: integer
+          example: 42
+        title:
+          type: string
+          example: "Bài tập ước lượng khoảng tin cậy"
+        summary:
+          type: string
+          example: "Dạng bài tập tìm khoảng tin cậy cho kỳ vọng khi đã biết phương sai của tổng thể phân phối chuẩn."
+        tags:
+          type: object
+          additionalProperties: false
+          properties:
+            subject:
+              type: string
+              example: "Xác suất thống kê"
+            topics:
+              type: array
+              items:
+                type: string
+              example: ["Ước lượng", "Khoảng tin cậy"]
+        content_type:
+          type: string
+          enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
+          example: "PROBLEM"
+        user_intent:
+          type: string
+          nullable: true
+          example: "Đề bài tập lớn cần làm"
+
+    ResurfaceBatchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - new_card
+        - candidates
+      properties:
+        new_card:
+          type: object
+          additionalProperties: false
+          required:
+            - title
+            - summary
+            - tags
+            - content_type
+          properties:
+            title:
+              type: string
+              example: "Phân phối chuẩn (Gaussian Distribution)"
+            summary:
+              type: string
+              example: "Lý thuyết phân phối chuẩn Gauss và bảng tra diện tích tích lũy Z."
+            tags:
+              type: object
+              additionalProperties: false
+              properties:
+                subject:
+                  type: string
+                  example: "Xác suất thống kê"
+                topics:
+                  type: array
+                  items:
+                    type: string
+                  example: ["Phân phối Gauss"]
+            content_type:
+              type: string
+              enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
+              example: "THEORY"
+            user_intent:
+              type: string
+              nullable: true
+              example: "Ôn thi cuối kỳ"
+        candidates:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CandidateCardItem'
+
+    ResurfaceResultItem:
+      type: object
+      additionalProperties: false
+      required:
+        - candidate_id
+        - group
+        - relation
+        - new_info
+        - benefit
+        - reason
+        - confidence
+      properties:
+        candidate_id:
+          type: integer
+          description: Must strictly match one of the candidate_ids in request
+          example: 42
+        group:
+          type: string
+          enum:
+            - SIMILAR
+            - COMPLEMENTARY
+            - ACTIONABLE
+          example: "COMPLEMENTARY"
+        relation:
+          type: string
+          enum:
+            - DUPLICATE
+            - SUPPLEMENT
+            - EXPLANATION
+            - CONTRADICTION
+          example: "EXPLANATION"
+        new_info:
+          type: string
+          example: "Ảnh mới cung cấp lý thuyết nền tảng cho dạng bài tập ước lượng trong ảnh cũ."
+        benefit:
+          type: string
+          example: "Giúp giải thích công thức tra bảng Z cần dùng trong bài tập cũ."
+        reason:
+          type: string
+          example: "Lý thuyết phân phối chuẩn này giải thích công thức áp dụng trong bài tập bạn chụp 2 tuần trước."
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+          example: 0.92
+
+    ResurfaceBatchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResurfaceResultItem'
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://remora.study/errors/quota-exceeded"
+        title:
+          type: string
+          example: "Daily AI Quota Exceeded"
+        status:
+          type: integer
+          example: 429
+        code:
+          type: string
+          description: Machine-readable stable error code
+          example: "QUOTA_EXCEEDED"
+        detail:
+          type: string
+          example: "You have reached your daily limit of 50 card extractions for demo user."
+        instance:
+          type: string
+          format: uri
+          example: "https://example.com/v1/ai/extract-card"

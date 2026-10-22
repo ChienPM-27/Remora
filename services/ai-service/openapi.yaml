@@ -1,0 +1,417 @@
+openapi: 3.1.0
+info:
+  title: Remora AI Service Internal Contract
+  version: 1.0.0
+  description: Internal contract-first specification for Remora AI Orchestration Service.
+  contact:
+    name: Remora AI Team
+    email: ai-dev@remora.study
+
+servers:
+  - url: http://ai-service:8082/v1
+    description: Internal Docker Network Address
+
+tags:
+  - name: Internal AI
+    description: Internal endpoints for AI vision extraction, embedding generation, and Resurfacing
+  - name: Monitoring
+    description: Internal liveness and readiness monitoring probes
+
+paths:
+  /ai/extract-card:
+    post:
+      summary: Extract card metadata and OCR text via Gemini 3.5 Flash
+      description: Internal endpoint receiving base64 image data and user intent to perform structured card extraction with Gemini 3.5 Flash.
+      operationId: internalExtractCard
+      tags:
+        - Internal AI
+      security:
+        - InternalAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+          description: Verified user ID forwarded by Gateway
+        - in: header
+          name: X-Request-Id
+          required: true
+          schema:
+            type: string
+          description: Distributed tracing request ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - image_base64
+              properties:
+                image_base64:
+                  type: string
+                  description: Base64-encoded compressed image string.
+                user_intent:
+                  type: string
+                  nullable: true
+                  description: Optional note taken by student.
+      responses:
+        '200':
+          description: Extraction successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtractedCardResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '504':
+          $ref: '#/components/responses/GatewayTimeoutError'
+
+  /ai/embeddings:
+    post:
+      summary: Generate normalized vector embedding via Gemini Embedding 2
+      description: Internal endpoint generating a 768-dimensional L2-normalized float32 vector embedding.
+      operationId: internalGenerateEmbedding
+      tags:
+        - Internal AI
+      security:
+        - InternalAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Request-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  description: Text content synthesized from user_intent, tags, summary, and OCR text.
+      responses:
+        '200':
+          description: Embedding generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmbeddingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /ai/resurface-batch:
+    post:
+      summary: Batch evaluate Stage 2 relationships across candidate cards via LLM
+      description: Internal endpoint batching candidate cards into a single Gemini prompt to classify connections into 3 groups.
+      operationId: internalEvaluateResurfacingBatch
+      tags:
+        - Internal AI
+      security:
+        - InternalAuth: []
+      parameters:
+        - in: header
+          name: X-User-Id
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Request-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResurfaceBatchRequest'
+      responses:
+        '200':
+          description: Resurfacing evaluation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResurfaceBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /healthz:
+    get:
+      summary: Liveness probe
+      description: Simple internal liveness probe returning UP when the Ktor Netty server is alive.
+      operationId: livenessCheck
+      tags:
+        - Monitoring
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "UP"
+
+  /readyz:
+    get:
+      summary: Readiness probe
+      description: Internal readiness probe verifying that GEMINI_API_KEY is configured and usable.
+      operationId: readinessCheck
+      tags:
+        - Monitoring
+      security: []
+      responses:
+        '200':
+          description: Service and Gemini credentials are ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "READY"
+                  gemini_api:
+                    type: string
+                    example: "CONFIGURED"
+
+components:
+  securitySchemes:
+    InternalAuth:
+      type: apiKey
+      in: header
+      name: X-Internal-Secret
+      description: Shared internal secret between Gateway and internal services
+
+  responses:
+    BadRequestError:
+      description: Invalid request payload
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ForbiddenError:
+      description: Invalid or missing X-Internal-Secret header
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    GatewayTimeoutError:
+      description: Upstream Gemini API call timed out
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+  schemas:
+    ExtractedCardResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - title
+        - summary
+        - tags
+        - content_type
+        - ocr_text
+      properties:
+        title:
+          type: string
+          maxLength: 80
+        summary:
+          type: string
+        tags:
+          type: object
+          additionalProperties: false
+          required:
+            - subject
+            - topics
+          properties:
+            subject:
+              type: string
+            topics:
+              type: array
+              items:
+                type: string
+        content_type:
+          type: string
+          enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
+        ocr_text:
+          type: string
+
+    EmbeddingResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - embedding
+        - dimension
+      properties:
+        embedding:
+          type: array
+          items:
+            type: number
+            format: float
+        dimension:
+          type: integer
+          example: 768
+
+    CandidateCardItem:
+      type: object
+      additionalProperties: false
+      required:
+        - candidate_id
+        - title
+        - summary
+        - tags
+        - content_type
+      properties:
+        candidate_id:
+          type: integer
+        title:
+          type: string
+        summary:
+          type: string
+        tags:
+          type: object
+          additionalProperties: false
+          properties:
+            subject:
+              type: string
+            topics:
+              type: array
+              items:
+                type: string
+        content_type:
+          type: string
+          enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
+        user_intent:
+          type: string
+          nullable: true
+
+    ResurfaceBatchRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - new_card
+        - candidates
+      properties:
+        new_card:
+          type: object
+          additionalProperties: false
+          required:
+            - title
+            - summary
+            - tags
+            - content_type
+          properties:
+            title:
+              type: string
+            summary:
+              type: string
+            tags:
+              type: object
+              additionalProperties: false
+              properties:
+                subject:
+                  type: string
+                topics:
+                  type: array
+                  items:
+                    type: string
+            content_type:
+              type: string
+              enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
+            user_intent:
+              type: string
+              nullable: true
+        candidates:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CandidateCardItem'
+
+    ResurfaceResultItem:
+      type: object
+      additionalProperties: false
+      required:
+        - candidate_id
+        - group
+        - relation
+        - new_info
+        - benefit
+        - reason
+        - confidence
+      properties:
+        candidate_id:
+          type: integer
+        group:
+          type: string
+          enum: [SIMILAR, COMPLEMENTARY, ACTIONABLE]
+        relation:
+          type: string
+          enum: [DUPLICATE, SUPPLEMENT, EXPLANATION, CONTRADICTION]
+        new_info:
+          type: string
+        benefit:
+          type: string
+        reason:
+          type: string
+        confidence:
+          type: number
+          format: float
+
+    ResurfaceBatchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - results
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResurfaceResultItem'
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+        - code
+        - detail
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://remora.study/errors/invalid-request"
+        title:
+          type: string
+        status:
+          type: integer
+        code:
+          type: string
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+          example: "http://ai-service:8082/v1/internal/errors/1"
