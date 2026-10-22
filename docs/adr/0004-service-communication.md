@@ -11,7 +11,7 @@ related_code: ["docs/architecture/01-context-and-containers.md", "services/gatew
 * **Trạng thái (Status):** Accepted
 * **Chủ sở hữu (Owner):** Lead
 * **Ngày quyết định (Date):** 2026-10-21
-* **Tài liệu liên quan:** [`docs/architecture/01-context-and-containers.md`](file:///d:/MyProject/Remora/docs/architecture/01-context-and-containers.md), [`docs/architecture/02-services-catalog.md`](file:///d:/MyProject/Remora/docs/architecture/02-services-catalog.md)
+* **Tài liệu liên quan:** [`01-context-and-containers.md`](../architecture/01-context-and-containers.md), [`02-services-catalog.md`](../architecture/02-services-catalog.md)
 
 ---
 

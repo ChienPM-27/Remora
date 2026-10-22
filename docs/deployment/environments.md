@@ -8,7 +8,7 @@ related_code: ["services/gateway", "services/ai-service", "docs/adr/0003-cloud-d
 
 # Hướng dẫn Môi trường Triển khai (Deployment Environments)
 
-Tài liệu này định nghĩa cấu hình chi tiết cho 2 môi trường hoạt động chính của Remora: **Local Development** (máy lập trình viên) và **Staging / Demo** (máy ảo AWS EC2 `t3.small`).
+Tài liệu này định nghĩa cấu hình chi tiết cho 2 môi trường hoạt động chính của Remora: **Local Development** (máy lập trình viên) và **Staging / Demo** (máy ảo AWS EC2 `t3.medium` cho demo hoặc `t3.small`).
 
 ---
 
@@ -17,7 +17,7 @@ Tài liệu này định nghĩa cấu hình chi tiết cho 2 môi trường ho�
 | Tiêu chí | Local Development | Staging / Demo (AWS EC2) |
 | --- | --- | --- |
 | **Mục đích** | Viết code, debug, chạy unit test và smoke test | Môi trường public phục vụ chấm thi Hackathon 24h |
-| **Hạ tầng** | Laptop / PC cá nhân (Docker Desktop / Podman) | AWS EC2 `t3.small` (Ubuntu 24.04 LTS, 2 vCPU, 2GB RAM) |
+| **Hạ tầng** | Laptop / PC cá nhân (Docker Desktop / Podman) | AWS EC2 `t3.medium` (Khuyến nghị demo: 2 vCPU, 4GB RAM) hoặc `t3.small` (2 vCPU, 2GB RAM + 2GB Swap) |
 | **Giao thức Ingress** | HTTP (`http://localhost:8080`) | HTTPS TLS 1.3 qua Caddy (`https://<DOMAIN>` hoặc DuckDNS) |
 | **CSDL** | PostgreSQL 16 (Docker container cục bộ) | PostgreSQL 16 (Docker container trên EC2) |
 | **Dữ liệu mẫu** | Nạp sẵn tài khoản `demo_student_01` qua `init.sql` | Nạp sẵn tài khoản `demo_student_01` qua `init.sql` |
@@ -62,7 +62,7 @@ services:
     image: ${CONTAINER_REGISTRY:-remora}/gateway:${IMAGE_TAG:-latest}
     container_name: remora-gateway
     restart: unless-stopped
-    mem_limit: 512m
+    mem_limit: 384m # Phù hợp cho cả t3.small (384m) hoặc nâng lên 512m trên t3.medium
     environment:
       - PORT=8080
       - JWT_SECRET=${JWT_SECRET}
@@ -86,7 +86,7 @@ services:
     image: ${CONTAINER_REGISTRY:-remora}/ai-service:${IMAGE_TAG:-latest}
     container_name: remora-ai-service
     restart: unless-stopped
-    mem_limit: 768m
+    mem_limit: 512m # Phù hợp cho t3.small (512m) hoặc nâng lên 768m trên t3.medium
     environment:
       - PORT=8082
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -101,7 +101,7 @@ services:
     image: postgres:16-alpine
     container_name: remora-postgres
     restart: unless-stopped
-    mem_limit: 384m
+    mem_limit: 256m # Phù hợp cho t3.small (256m) hoặc 384m trên t3.medium
     environment:
       - POSTGRES_DB=remora_db
       - POSTGRES_USER=${DB_USER}
@@ -160,11 +160,12 @@ curl -f http://localhost:8080/v1/readyz
 2. **File mẫu `.env.example` công khai:**
    ```bash
    # Remora Environment Variables Template
-   JWT_SECRET=replace_with_minimum_32_chars_random_secret
+   # Tạo khóa ngẫu nhiên bằng lệnh: openssl rand -hex 32
+   JWT_SECRET=<GENERATE_WITH_OPENSSL_RAND_HEX_32>
    DB_USER=remora_admin
-   DB_PASSWORD=replace_with_strong_password
-   INTERNAL_SERVICE_KEY=replace_with_internal_secret_token
-   GEMINI_API_KEY=AIzaSy_replace_with_real_gemini_api_key
+   DB_PASSWORD=<GENERATE_WITH_OPENSSL_RAND_HEX_32>
+   INTERNAL_SERVICE_KEY=<GENERATE_WITH_OPENSSL_RAND_HEX_32>
+   GEMINI_API_KEY=<REPLACE_WITH_ACTUAL_GEMINI_API_KEY>
    ```
 3. **Trên máy chủ AWS EC2:**
    - File cấu hình được tạo thủ công tại `/opt/remora/.env`.

@@ -1,52 +1,52 @@
 [versions]
 # Build system & Kotlin
-agp = "8.7.2"
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.28"
+agp = "8.7.2" # [VERIFY] AGP version compatibility with Gradle 8.11 / Kotlin 2.0.21
+kotlin = "2.0.21" # [VERIFY] Kotlin compiler version
+ksp = "2.0.21-1.0.28" # [VERIFY] KSP version matched with Kotlin 2.0.21
 jvmTarget = "21"
 
 # AndroidX Core & Lifecycle
-coreKtx = "1.15.0"
-lifecycle = "2.8.7"
-activityCompose = "1.9.3"
+coreKtx = "1.15.0" # [VERIFY]
+lifecycle = "2.8.7" # [VERIFY]
+activityCompose = "1.9.3" # [VERIFY]
 
 # Compose
-composeBom = "2024.10.01"
+composeBom = "2024.10.01" # [VERIFY] Compose BOM release
 
 # Navigation
-navigationCompose = "2.8.3"
+navigationCompose = "2.8.3" # [VERIFY]
 
-# Dependency Injection (Hilt)
-hilt = "2.52"
-hiltNavigationCompose = "1.2.0"
+# Dependency Injection (Hilt) - [DECISION]: Postponed / Not used for MVP.
+# Per AGENTS.md rule: "No speculative abstractions: no DI framework unless already present".
+# Use manual DI / factory functions for MVP to eliminate annotation processing overhead & build latency.
+# Kept here as reference/reserved for post-MVP evaluation.
+hilt = "2.52" # [VERIFY] Reserved / Post-MVP
+hiltNavigationCompose = "1.2.0" # [VERIFY] Reserved / Post-MVP
 
 # Local Database & Storage
-room = "2.6.1"
-datastore = "1.1.1"
+room = "2.6.1" # [VERIFY] Room SQLite
+datastore = "1.1.1" # [VERIFY]
 
 # Background Work
-workManager = "2.10.0"
-hiltWork = "1.2.0"
+workManager = "2.10.0" # [VERIFY]
+hiltWork = "1.2.0" # [VERIFY] Reserved / Post-MVP
 
 # Networking & Serialization
-retrofit = "2.11.0"
-okhttp = "4.12.0"
-kotlinxSerializationJson = "1.7.3"
-kotlinxCoroutines = "1.9.0"
+retrofit = "2.11.0" # [VERIFY]
+okhttp = "4.12.0" # [VERIFY]
+kotlinxSerializationJson = "1.7.3" # [VERIFY]
+kotlinxCoroutines = "1.9.0" # [VERIFY]
 
 # Image Loading
-coil = "2.7.0"
-
-# On-Device Machine Learning
-mlkitTextRecognition = "16.0.1"
+coil = "2.7.0" # [VERIFY]
 
 # Logging & Testing
-timber = "5.0.1"
-junit = "4.13.2"
-androidxTestExt = "1.2.1"
-espresso = "3.6.1"
-turbine = "1.2.0"
-mockwebserver = "4.12.0"
+timber = "5.0.1" # [VERIFY]
+junit = "4.13.2" # [VERIFY]
+androidxTestExt = "1.2.1" # [VERIFY]
+espresso = "3.6.1" # [VERIFY]
+turbine = "1.2.0" # [VERIFY]
+mockwebserver = "4.12.0" # [VERIFY]
 
 [libraries]
 # AndroidX Core
@@ -67,7 +67,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 # Navigation
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
-# Hilt DI
+# Dependency Injection (Hilt) - Reserved / Post-MVP
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "hilt" }
 androidx-hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavigationCompose" }
@@ -92,14 +92,12 @@ okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor",
 
 # Kotlinx
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 
 # Coil Image Loading
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
-
-# ML Kit OCR on-device
-mlkit-text-recognition = { group = "com.google.android.gms", name = "play-services-mlkit-text-recognition", version.ref = "mlkitTextRecognition" }
 
 # Logging
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }

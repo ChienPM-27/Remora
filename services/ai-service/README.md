@@ -5,7 +5,7 @@ Dịch vụ nội bộ chuyên trách điều phối và giao tiếp độc quy�
 * **Chủ sở hữu (Owner):** AI
 * **Trạng thái:** `[PLANNED]`
 * **Thư mục mã nguồn:** `services/ai-service/`
-* **Hợp đồng API:** [`openapi.yaml`](file:///d:/MyProject/Remora/services/ai-service/openapi.yaml)
+* **Hợp đồng API:** [`openapi.yaml`](openapi.yaml)
 
 ---
 
@@ -31,10 +31,10 @@ Dịch vụ nội bộ chuyên trách điều phối và giao tiếp độc quy�
 | Tên biến | Bắt buộc | Ví dụ giá trị | Là bí mật? | Mục đích |
 | --- | --- | --- | --- | --- |
 | `PORT` | Có | `8082` | Không | Cổng HTTP nội bộ mà service lắng nghe |
-| `GEMINI_API_KEY` | Có | `AIzaSy...secret_key` | **Có** | Khóa API chính thức của Google Gemini |
+| `GEMINI_API_KEY` | Có | `<YOUR_GEMINI_API_KEY>` | **Có** | Khóa API chính thức của Google Gemini |
 | `GEMINI_VISION_MODEL` | Không | `gemini-3.5-flash` | Không | Model dùng cho Vision OCR & Extraction |
 | `GEMINI_EMBEDDING_MODEL`| Không | `gemini-embedding-2` | Không | Model dùng để sinh vector embedding |
-| `INTERNAL_SERVICE_KEY` | Có | `internal_secret_token_123` | **Có** | Khóa bí mật nội bộ đối chiếu với `gateway` |
+| `INTERNAL_SERVICE_KEY` | Có | `<GENERATE_WITH_OPENSSL_RAND_HEX_32>` | **Có** | Khóa bí mật nội bộ đối chiếu với `gateway` |
 | `GEMINI_TIMEOUT_MS` | Không | `12000` | Không | Giới hạn thời gian chờ phản hồi từ Gemini |
 
 ---
@@ -60,7 +60,7 @@ curl http://localhost:8082/v1/healthz
 # 2. Thử nghiệm sinh embedding nội bộ
 curl -X POST http://localhost:8082/v1/ai/embeddings \
   -H "Content-Type: application/json" \
-  -H "X-Internal-Secret: internal_secret_token_123" \
+  -H "X-Internal-Secret: <INTERNAL_SERVICE_KEY>" \
   -H "X-User-Id: usr_demo_student_01" \
   -H "X-Request-Id: req_test_001" \
   -d '{"text":"Phân phối chuẩn Gaussian"}'

@@ -1,22 +1,32 @@
 ---
 title: "Remora MVP Implementation Plan (Superpowers Archive)"
-status: PLANNED
+status: SUPERSEDED
 owner: "Lead"
-last_verified: 2026-10-16
+last_verified: 2026-10-22
 related_code: ["core/model"]
 ---
 
-# Remora MVP Implementation Plan
+# Remora MVP Implementation Plan [SUPERSEDED]
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> [!WARNING]
+> **SUPERSEDED ARCHIVE DOCUMENT - KHÔNG CÒN HIỆU LỰC THI HÀNH**
+> Tài liệu kế hoạch này được lưu trữ phục vụ mục đích tham khảo lịch sử. Toàn bộ kế hoạch và kiến trúc đã được chuẩn hóa trong `docs/architecture/`, `docs/adr/` và `AGENTS.md`.
+>
+> **Điểm mâu thuẫn chính với các quyết định kiến trúc đã chốt:**
+> 1. **Kiến trúc Backend & Bảo mật Secret:** Kế hoạch cũ thiết kế client độc lập (Standalone) gọi trực tiếp Gemini API với API key trên thiết bị. Quyết định đã chốt (ADR 0001, ADR 0004, `docs/architecture/04-auth-and-security.md`, AGENTS.md): Kiến trúc microservices (`gateway` + `ai-service`) viết bằng Ktor trên EC2, Android client không bao giờ nắm giữ Gemini API key trực tiếp.
+> 2. **AI Models & Pipeline OCR:** Kế hoạch cũ dùng `gemini-2.5-flash` + `text-embedding-004` (hoặc ML Kit on-device). Quyết định đã chốt (AGENTS.md Section 3): `gemini-3.5-flash` xử lý cả Vision và OCR trong 1 request duy nhất (loại bỏ hoàn toàn ML Kit), embedding dùng `gemini-embedding-2`.
+> 3. **Dependency Injection:** Kế hoạch cũ giả định dùng Hilt/Dagger. Quyết định đã chốt: Không dùng DI framework cho MVP (tránh speculative abstraction), sử dụng Manual DI / Service Locator nhẹ để tối ưu thời gian build và độ ổn định.
+> 4. **Quản lý Kế hoạch:** Spec Kit (`AGENTS.md` + `tasks.md`) là single source of truth cho execution planning thay vì các file plan riêng biệt.
 
-**Goal:** Xây dựng ứng dụng Android Remora (Second Brain for Screenshots) hoàn chỉnh trong phạm vi Hackathon 24h, tự động bắt screenshot bài giảng, dùng Gemini 2.5 Flash trích xuất kiến thức có cấu trúc, tìm kiếm ngữ nghĩa và chủ động gợi nhớ kiến thức liên quan qua thuật toán Memory Resurfacing 2 tầng.
+> **For agentic workers:** ARCHIVED REFERENCE ONLY. Do not execute tasks directly from this file.
 
-**Architecture:** Ứng dụng Android độc lập (Standalone Client) theo mô hình Clean Architecture / MVI. MediaStore ContentObserver chạy ngầm phát hiện ảnh mới và kích hoạt Android Notification với Action Quick Intent; Room SQLite lưu trữ metadata và vector embedding (768d); tính toán Cosine Similarity trực tiếp trên bộ nhớ (In-memory Kotlin) và gọi Gemini Flash API (Structured JSON) để phân tích thị giác và phân loại quan hệ tri thức 2 tầng.
+**Goal:** Xây dựng ứng dụng Android Remora (Second Brain for Screenshots) hoàn chỉnh trong phạm vi Hackathon 24h, tự động bắt screenshot bài giảng, dùng Gemini trích xuất kiến thức có cấu trúc, tìm kiếm ngữ nghĩa và chủ động gợi nhớ kiến thức liên quan qua thuật toán Memory Resurfacing 2 tầng.
 
-**Tech Stack:** Kotlin 2.0+, Jetpack Compose, Material 3, Android SDK 34 (Android 14), Room SQLite, Kotlinx Coroutines & Serialization, OkHttp 4 / Retrofit 2, Google Gemini API (Gemini 2.5 Flash + text-embedding-004), Coil Compose.
+**Architecture:** Ứng dụng Android độc lập (Standalone Client) theo mô hình Clean Architecture / MVI (đã thay thế bởi mô hình Client + Backend Proxy trong ADR 0001). MediaStore ContentObserver chạy ngầm phát hiện ảnh mới và kích hoạt Android Notification với Action Quick Intent; Room SQLite lưu trữ metadata và vector embedding; tính toán Cosine Similarity trực tiếp trên bộ nhớ và phân tích quan hệ tri thức 2 tầng.
 
-**Spec:** [C:\Users\Lionel Pham\.gemini\antigravity\brain\6fe34233-a661-4522-9d7b-639c1d9bd414\remora-technical-analysis-and-plan.md](file:///C:/Users/Lionel%20Pham/.gemini/antigravity/brain/6fe34233-a661-4522-9d7b-639c1d9bd414/remora-technical-analysis-and-plan.md)
+**Tech Stack:** Kotlin 2.0+, Jetpack Compose, Material 3, Android SDK 34 (Android 14), Room SQLite, Kotlinx Coroutines & Serialization, OkHttp 4 / Retrofit 2, Gemini API, Coil Compose.
+
+**Spec:** Tham khảo [remora-proposal.md](../remora-proposal.md) và [technical-plan.md](../technical-plan.md).
 
 ---
 

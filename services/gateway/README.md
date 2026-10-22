@@ -5,7 +5,7 @@ Cổng tiếp nhận duy nhất cho toàn bộ hệ thống Remora, chịu trác
 * **Chủ sở hữu (Owner):** Lead / AI
 * **Trạng thái:** `[PLANNED]`
 * **Thư mục mã nguồn:** `services/gateway/`
-* **Hợp đồng API:** [`openapi.yaml`](file:///d:/MyProject/Remora/services/gateway/openapi.yaml)
+* **Hợp đồng API:** [`openapi.yaml`](openapi.yaml)
 
 ---
 
@@ -32,12 +32,12 @@ Cổng tiếp nhận duy nhất cho toàn bộ hệ thống Remora, chịu trác
 | Tên biến | Bắt buộc | Ví dụ giá trị | Là bí mật? | Mục đích |
 | --- | --- | --- | --- | --- |
 | `PORT` | Có | `8080` | Không | Cổng HTTP mà gateway lắng nghe |
-| `JWT_SECRET` | Có | `c8f1e0d3...long_random_string` | **Có** | Khóa bí mật dùng để ký và giải mã JWT HMAC-SHA256 |
+| `JWT_SECRET` | Có | `<GENERATE_WITH_OPENSSL_RAND_HEX_32>` | **Có** | Khóa bí mật dùng để ký và giải mã JWT HMAC-SHA256 |
 | `DATABASE_URL` | Có | `jdbc:postgresql://postgres:5432/remora_db` | Không | Địa chỉ kết nối PostgreSQL |
 | `DB_USER` | Có | `remora_user` | Không | Tên tài khoản DB |
-| `DB_PASSWORD` | Có | `remora_secret_pass` | **Có** | Mật khẩu tài khoản DB |
+| `DB_PASSWORD` | Có | `<GENERATE_WITH_OPENSSL_RAND_HEX_32>` | **Có** | Mật khẩu tài khoản DB |
 | `AI_SERVICE_URL` | Có | `http://ai-service:8082` | Không | Địa chỉ URL nội bộ của `ai-service` |
-| `INTERNAL_SERVICE_KEY` | Có | `internal_secret_token_123` | **Có** | Khóa chia sẻ nội bộ gửi kèm trong header `X-Internal-Secret` |
+| `INTERNAL_SERVICE_KEY` | Có | `<GENERATE_WITH_OPENSSL_RAND_HEX_32>` | **Có** | Khóa chia sẻ nội bộ gửi kèm trong header `X-Internal-Secret` |
 | `RATE_LIMIT_PER_MINUTE` | Không | `60` | Không | Giới hạn số request tối đa/phút mỗi user |
 
 ---

@@ -21,15 +21,15 @@ Mọi tài liệu và mục con trong tài liệu đều được gắn nhãn tr
 
 Dành cho thành viên nhóm phát triển và coding agents (Antigravity, Claude Code, Cursor):
 
-1. **Bắt đầu tại đây:** [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md) — Quy tắc làm việc, ràng buộc 24h Hackathon, hợp đồng dữ liệu cốt lõi, bảo mật và quyền riêng tư.
-2. **Tổng quan hệ thống:** [`docs/architecture/00-overview.md`](file:///d:/MyProject/Remora/docs/architecture/00-overview.md) — Mục tiêu, phạm vi MVP vs Target, các nguyên tắc bất khả xâm phạm.
-3. **Mô hình kiến trúc & phân ranh giới:** [`docs/architecture/01-context-and-containers.md`](file:///d:/MyProject/Remora/docs/architecture/01-context-and-containers.md) — Sơ đồ C4 Context & Container (Mermaid).
-4. **Danh mục dịch vụ:** [`docs/architecture/02-services-catalog.md`](file:///d:/MyProject/Remora/docs/architecture/02-services-catalog.md) — Danh sách microservices, quyền sở hữu, cổng mạng và phạm vi.
+1. **Bắt đầu tại đây:** [`AGENTS.md`](../AGENTS.md) — Quy tắc làm việc, ràng buộc 24h Hackathon, hợp đồng dữ liệu cốt lõi, bảo mật và quyền riêng tư.
+2. **Tổng quan hệ thống:** [`docs/architecture/00-overview.md`](architecture/00-overview.md) — Mục tiêu, phạm vi MVP vs Target, các nguyên tắc bất khả xâm phạm.
+3. **Mô hình kiến trúc & phân ranh giới:** [`docs/architecture/01-context-and-containers.md`](architecture/01-context-and-containers.md) — Sơ đồ C4 Context & Container (Mermaid).
+4. **Danh mục dịch vụ:** [`docs/architecture/02-services-catalog.md`](architecture/02-services-catalog.md) — Danh sách microservices, quyền sở hữu, cổng mạng và phạm vi.
 5. **Các quyết định kiến trúc quan trọng (ADRs):**
-   - [`docs/adr/0001-microservices-vs-modular-monolith.md`](file:///d:/MyProject/Remora/docs/adr/0001-microservices-vs-modular-monolith.md)
-   - [`docs/adr/0002-auth-approach.md`](file:///d:/MyProject/Remora/docs/adr/0002-auth-approach.md)
-   - [`docs/adr/0004-service-communication.md`](file:///d:/MyProject/Remora/docs/adr/0004-service-communication.md)
-   - [`docs/adr/0005-data-ownership-and-database.md`](file:///d:/MyProject/Remora/docs/adr/0005-data-ownership-and-database.md)
+   - [`docs/adr/0001-microservices-vs-modular-monolith.md`](adr/0001-microservices-vs-modular-monolith.md)
+   - [`docs/adr/0002-auth-approach.md`](adr/0002-auth-approach.md)
+   - [`docs/adr/0004-service-communication.md`](adr/0004-service-communication.md)
+   - [`docs/adr/0005-data-ownership-and-database.md`](adr/0005-data-ownership-and-database.md)
 6. **Hợp đồng & Triển khai (Phase 2 & 3):**
    - Data ownership, Auth & Security, Client-Backend Contract tại `docs/architecture/`.
    - OpenAPI specifications tại `services/<service>/openapi.yaml`.

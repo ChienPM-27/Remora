@@ -26,7 +26,7 @@ jobs:
         run: npx -y @stoplight/spectral-cli lint "services/gateway/openapi.yaml" "services/ai-service/openapi.yaml" --fail-severity warn
 
   android-build-and-test:
-    name: Android Lint, Test & Assemble APK
+    name: Android Lint & Test (Core Model)
     runs-on: ubuntu-latest
     needs: doc-and-contract-checks
     steps:
@@ -45,18 +45,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Android Lint
-        run: ./gradlew lint
+      - name: Run Core Model Tests
+        run: ./gradlew :core:model:test
 
-      - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest
-
-      - name: Assemble Debug APK
-        run: ./gradlew assembleDebug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: remora-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: warn

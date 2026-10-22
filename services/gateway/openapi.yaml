@@ -400,8 +400,7 @@ components:
           enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
           example: "PROBLEM"
         user_intent:
-          type: string
-          nullable: true
+          type: [string, "null"]
           example: "Đề bài tập lớn cần làm"
 
     ResurfaceBatchRequest:
@@ -443,8 +442,7 @@ components:
               enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
               example: "THEORY"
             user_intent:
-              type: string
-              nullable: true
+              type: [string, "null"]
               example: "Ôn thi cuối kỳ"
         candidates:
           type: array

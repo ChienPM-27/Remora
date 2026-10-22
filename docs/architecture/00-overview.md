@@ -78,9 +78,9 @@ Hệ thống được thiết kế theo lộ trình rõ ràng để vừa đáp 
 
 ## 5. Hiện trạng mã nguồn & Ghi nhận cần cập nhật `:core:model`
 
-* **Mã nguồn hiện có `[IMPLEMENTED]`:** Thư mục [`core/model`](file:///d:/MyProject/Remora/core/model) đã có mã nguồn Kotlin cho thực thể `Screenshot`, enum `ProcessingStatus`, `RelationshipType`, `AiContracts`, `VectorMath`.
+* **Mã nguồn hiện có `[IMPLEMENTED]`:** Thư mục [`core/model`](../../core/model) đã có mã nguồn Kotlin cho thực thể `Screenshot`, enum `ProcessingStatus`, `RelationshipType`, `AiContracts`, `VectorMath`.
 * **Cần cập nhật trong `:core:model` `[PLANNED]`:**
-  1. Đổi tên thực thể `Screenshot` thành `MemoryCard` hoặc chuẩn hóa tên bảng `memory_card` theo đúng [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md).
+  1. Đổi tên thực thể `Screenshot` thành `MemoryCard` hoặc chuẩn hóa tên bảng `memory_card` theo đúng [`AGENTS.md`](../../AGENTS.md).
   2. Rút gọn `ProcessingStatus` về 3 trạng thái chuẩn: `PENDING | DONE | FAILED` (loại bỏ trạng thái trung gian `MLKIT_OCR_DONE` vì MVP không dùng ML Kit).
   3. Bổ sung trường `contentType: ContentType` vào kết quả trích xuất và lưu trữ.
   4. Chuẩn hóa phân loại Resurfacing theo 2 trường: `group` (`SIMILAR | COMPLEMENTARY | ACTIONABLE`) và `relation` (`DUPLICATE | SUPPLEMENT | EXPLANATION | CONTRADICTION`).

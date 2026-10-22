@@ -11,7 +11,7 @@ related_code: ["AGENTS.md", "docs/architecture/04-auth-and-security.md"]
 * **Trạng thái (Status):** Accepted
 * **Chủ sở hữu (Owner):** Lead
 * **Ngày quyết định (Date):** 2026-10-21
-* **Tài liệu liên quan:** [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md), [`docs/architecture/02-services-catalog.md`](file:///d:/MyProject/Remora/docs/architecture/02-services-catalog.md)
+* **Tài liệu liên quan:** [`AGENTS.md`](../../AGENTS.md), [`02-services-catalog.md`](../architecture/02-services-catalog.md)
 
 ---
 

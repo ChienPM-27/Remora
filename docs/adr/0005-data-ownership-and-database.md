@@ -11,7 +11,7 @@ related_code: ["AGENTS.md", "docs/architecture/03-data-ownership.md"]
 * **Trạng thái (Status):** Accepted
 * **Chủ sở hữu (Owner):** Lead
 * **Ngày quyết định (Date):** 2026-10-21
-* **Tài liệu liên quan:** [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md), [`docs/architecture/00-overview.md`](file:///d:/MyProject/Remora/docs/architecture/00-overview.md), [`docs/architecture/02-services-catalog.md`](file:///d:/MyProject/Remora/docs/architecture/02-services-catalog.md)
+* **Tài liệu liên quan:** [`AGENTS.md`](../../AGENTS.md), [`00-overview.md`](../architecture/00-overview.md), [`02-services-catalog.md`](../architecture/02-services-catalog.md)
 
 ---
 
@@ -40,7 +40,7 @@ Một trong những cam kết cốt lõi của Remora là **Bảo vệ quyền r
 ### Phương án B: Lưu trữ tập trung toàn bộ dữ liệu trên Cloud (Centralized Cloud DB)
 * **Mô tả:** Lưu trữ toàn bộ ảnh trên S3/Cloud Storage, lưu `ocr_text` và vector lên PostgreSQL Cloud.
 * **Ưu điểm (Pros):** Dễ dàng xem dữ liệu từ web dashboard.
-* **Nhược điểm (Cons):** Vi phạm cam kết quyền riêng tư trong [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md); tốn băng thông, chi phí lưu trữ lớn và tăng nguy cơ vi phạm bảo mật.
+* **Nhược điểm (Cons):** Vi phạm cam kết quyền riêng tư trong [`AGENTS.md`](../../AGENTS.md); tốn băng thông, chi phí lưu trữ lớn và tăng nguy cơ vi phạm bảo mật.
 
 ### Phương án C: Sử dụng Flyway / Liquibase ngay từ MVP
 * **Mô tả:** Viết các migration scripts dạng `V1__init.sql`, `V2__add_quota.sql` và dùng Flyway để migrate khi ứng dụng Ktor khởi động.

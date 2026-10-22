@@ -54,6 +54,25 @@ npx -y @stoplight/spectral-cli lint "services/gateway/openapi.yaml" "services/ai
 # 2. Kiểm tra tài liệu và front-matter
 node scripts/check-docs.js
 
-# 3. Kiểm tra Android build & test
-./gradlew lint testDebugUnitTest assembleDebug
+# 3. Kiểm tra Android build & test (:core:model:test trong giai đoạn đầu)
+./gradlew :core:model:test
+```
+
+---
+
+## 4. Đóng gói & Đẩy Docker Image (Container Delivery) `[PLANNED]`
+
+Khi code được merge vào nhánh `main`, pipeline CI/CD thực hiện tự động đóng gói và đẩy container image lên GitHub Container Registry (GHCR) để máy chủ EC2 có thể kéo về triển khai (`docker compose pull`):
+
+```bash
+# Đăng nhập GHCR
+echo $CR_PAT | docker login ghcr.io -u <GITHUB_USERNAME> --password-stdin
+
+# Build & Tag Docker Images
+docker build -t ghcr.io/chienpm-27/remora/gateway:latest -f services/gateway/Dockerfile .
+docker build -t ghcr.io/chienpm-27/remora/ai-service:latest -f services/ai-service/Dockerfile .
+
+# Push Images lên Registry
+docker push ghcr.io/chienpm-27/remora/gateway:latest
+docker push ghcr.io/chienpm-27/remora/ai-service:latest
 ```

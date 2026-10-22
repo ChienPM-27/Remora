@@ -11,7 +11,7 @@ related_code: ["AGENTS.md", "docs/architecture/01-context-and-containers.md"]
 * **Trạng thái (Status):** Accepted
 * **Chủ sở hữu (Owner):** Lead
 * **Ngày quyết định (Date):** 2026-10-21
-* **Tài liệu liên quan:** [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md), [`docs/architecture/01-context-and-containers.md`](file:///d:/MyProject/Remora/docs/architecture/01-context-and-containers.md)
+* **Tài liệu liên quan:** [`AGENTS.md`](../../AGENTS.md), [`01-context-and-containers.md`](../architecture/01-context-and-containers.md)
 
 ---
 
@@ -56,7 +56,7 @@ Lựa chọn chính thức: **Phương án B (Lightweight Microservices)** gồm
 
 Lý do:
 1. Đảm bảo đúng kiến trúc Microservices + Auth Gateway theo yêu cầu đề bài.
-2. Cách ly bảo mật tuyệt đối cho `GEMINI_API_KEY` trong mạng nội bộ, đúng quy tắc trong [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md).
+2. Cách ly bảo mật tuyệt đối cho `GEMINI_API_KEY` trong mạng nội bộ, đúng quy tắc trong [`AGENTS.md`](../../AGENTS.md).
 3. Kiến trúc đủ gọn (chỉ 2 service chính) để hoàn thành và vận hành trơn tru trong 24h mà không gây quá tải cho máy ảo `t3.small`.
 
 ---

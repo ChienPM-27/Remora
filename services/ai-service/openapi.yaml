@@ -53,8 +53,7 @@ paths:
                   type: string
                   description: Base64-encoded compressed image string.
                 user_intent:
-                  type: string
-                  nullable: true
+                  type: [string, "null"]
                   description: Optional note taken by student.
       responses:
         '200':
@@ -304,8 +303,7 @@ components:
           type: string
           enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
         user_intent:
-          type: string
-          nullable: true
+          type: [string, "null"]
 
     ResurfaceBatchRequest:
       type: object
@@ -341,8 +339,7 @@ components:
               type: string
               enum: [THEORY, PROBLEM, SOLUTION, CODE, NOTES, UNKNOWN]
             user_intent:
-              type: string
-              nullable: true
+              type: [string, "null"]
         candidates:
           type: array
           maxItems: 20

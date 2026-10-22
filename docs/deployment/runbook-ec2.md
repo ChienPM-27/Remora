@@ -77,18 +77,28 @@ sudo chown -R ubuntu:ubuntu /opt/remora
 cd /opt/remora
 
 # Clone repo mã nguồn
-git clone https://github.com/YourTeam/Remora.git .
+git clone https://github.com/ChienPM-27/Remora.git .
 
-# Tạo file cấu hình môi trường bảo mật
-cat << 'EOF' > .env
-JWT_SECRET=c8f1e0d3a9b74c2e5f8a1d0b3c6e9f2a5d8b1c4e7a0d3f6b9c2e5a8d1f4b7c0e
+# Tạo file cấu hình môi trường bảo mật (sử dụng openssl sinh chuỗi ngẫu nhiên an toàn)
+cat << EOF > .env
+JWT_SECRET=$(openssl rand -hex 32)
 DB_USER=remora_admin
-DB_PASSWORD=SecurePassword2026_Hackathon!
-INTERNAL_SERVICE_KEY=InternalSecretToken_Remora_2026
-GEMINI_API_KEY=AIzaSy_REPLACE_WITH_ACTUAL_GEMINI_API_KEY
+DB_PASSWORD=$(openssl rand -hex 32)
+INTERNAL_SERVICE_KEY=$(openssl rand -hex 32)
+GEMINI_API_KEY=<REPLACE_WITH_ACTUAL_GEMINI_API_KEY>
 EOF
 
 chmod 600 .env
+```
+
+### Bước 2.3.b: Build & Đẩy Docker Images (Nếu tự build thủ công)
+```bash
+# Thực hiện trên máy local có Docker hoặc runner CI:
+docker build -t ghcr.io/chienpm-27/remora/gateway:latest -f services/gateway/Dockerfile .
+docker build -t ghcr.io/chienpm-27/remora/ai-service:latest -f services/ai-service/Dockerfile .
+
+docker push ghcr.io/chienpm-27/remora/gateway:latest
+docker push ghcr.io/chienpm-27/remora/ai-service:latest
 ```
 
 ### Bước 2.4: Cấu hình Caddyfile (Tự động cấp TLS)

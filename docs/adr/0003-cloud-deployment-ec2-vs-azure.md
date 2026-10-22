@@ -12,7 +12,7 @@ related_code: ["AGENTS.md", "docs/deployment/runbook-ec2.md"]
 * **Lựa chọn chính thức (Chosen):** AWS EC2 `t3.small` (x86)
 * **Chủ sở hữu (Owner):** Lead
 * **Ngày quyết định (Date):** 2026-10-21
-* **Tài liệu liên quan:** [`AGENTS.md`](file:///d:/MyProject/Remora/AGENTS.md), [`docs/architecture/01-context-and-containers.md`](file:///d:/MyProject/Remora/docs/architecture/01-context-and-containers.md), [`docs/deployment/runbook-ec2.md`](file:///d:/MyProject/Remora/docs/deployment/runbook-ec2.md)
+* **Tài liệu liên quan:** [`AGENTS.md`](../../AGENTS.md), [`01-context-and-containers.md`](../architecture/01-context-and-containers.md), [`runbook-ec2.md`](../deployment/runbook-ec2.md)
 
 ---
 
