@@ -1,8 +1,8 @@
 ---
 title: "Remora Architecture: Overview, Scope & Constraints"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["AGENTS.md", "core/model", "technical-plan.md"]
 ---
 
@@ -18,7 +18,7 @@ related_code: ["AGENTS.md", "core/model", "technical-plan.md"]
 [Thông báo Quick Action + Nhập User Intent] 
        ↓ (Chỉ gửi khi người dùng bấm Lưu)
 [Gateway & AI-Service] 
-       ↓ (Gemini 3.5 Flash: OCR + Title + Summary + Subject + Tags + ContentType)
+       ↓ (gemini-3.5-flash-lite [chính] / gemini-3.5-flash [dự phòng]: OCR + Title + Summary + Subject + Tags + ContentType)
 [Lưu Room SQLite + Vector Float32] 
        ↓ (Cosine Top-15 trên máy)
 [Memory Resurfacing Stage 2 (LLM Batch 1 lần)] 
@@ -47,8 +47,8 @@ Hệ thống được thiết kế theo lộ trình rõ ràng để vừa đáp 
 | **Backend Topology** | 2 microservices tinh gọn: `gateway` (kèm xác thực tối thiểu) + `ai-service`. Không có `core-service`. | Đầy đủ microservices: `gateway`, `auth-service`, `ai-service`, `core-service` (sync & search). | `[PLANNED]` |
 | **Backend Data Store** | PostgreSQL 16 (khởi tạo qua `init.sql`). Chỉ lưu tài khoản người dùng, quota và access metrics. **Tuyệt đối không lưu ảnh và `ocr_text`**. | PostgreSQL 16 tích hợp tiện ích mở rộng `pgvector`, lưu trữ bản sao thẻ nhớ để tìm kiếm và đồng bộ giữa nhiều thiết bị. | `[PLANNED]` |
 | **Authentication** | Self-issued JWT (HMAC-SHA256). MVP dùng tài khoản demo cấu hình sẵn (`demo_student_01`). | Managed IdP (Firebase Auth / Supabase Auth) hỗ trợ Sign in with Google, email xác thực. | `[PLANNED]` |
-| **AI Processing** | Vision OCR + trích xuất thẻ: `gemini-3.5-flash`; Embedding: `gemini-embedding-2`. Gọi thông qua `ai-service`. | Hybrid: On-device OCR (ML Kit fallback khi offline) + Cloud Gemini. | `[PLANNED]` |
-| **Deployment** | Docker Compose chạy trên 1 máy ảo AWS EC2 `t3.small` (x86). | Kubernetes / AWS ECS hoặc Container Apps có auto-scaling và CDN. | `[PLANNED]` |
+| **AI Processing** | Vision OCR + trích xuất thẻ: `gemini-3.5-flash-lite` (chính), `gemini-3.5-flash` (dự phòng); Embedding: `gemini-embedding-2` (768d). Gọi thông qua `ai-service`. | Hybrid: On-device OCR (ML Kit fallback khi offline) + Cloud Gemini. | `[PLANNED]` |
+| **Deployment** | Docker Compose chạy trên 1 máy ảo AWS EC2 `t3.medium` (x86) cho demo; `t3.small` là phương án dự phòng (giảm mem_limit + 2GB swap). | Kubernetes / AWS ECS hoặc Container Apps có auto-scaling và CDN. | `[PLANNED]` |
 
 ---
 

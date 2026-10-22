@@ -1,8 +1,8 @@
 ---
 title: "Remora Services Catalog"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["services/gateway", "services/ai-service"]
 ---
 

@@ -1,8 +1,8 @@
 ---
 title: "ADR 0001: Microservices Tinh gọn vs Modular Monolith"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["AGENTS.md", "docs/architecture/01-context-and-containers.md"]
 ---
 
@@ -57,7 +57,7 @@ Lựa chọn chính thức: **Phương án B (Lightweight Microservices)** gồm
 Lý do:
 1. Đảm bảo đúng kiến trúc Microservices + Auth Gateway theo yêu cầu đề bài.
 2. Cách ly bảo mật tuyệt đối cho `GEMINI_API_KEY` trong mạng nội bộ, đúng quy tắc trong [`AGENTS.md`](../../AGENTS.md).
-3. Kiến trúc đủ gọn (chỉ 2 service chính) để hoàn thành và vận hành trơn tru trong 24h mà không gây quá tải cho máy ảo `t3.small`.
+3. Kiến trúc đủ gọn (chỉ 2 service chính) để hoàn thành và vận hành trơn tru trong 24h trên máy ảo demo EC2 `t3.medium` (hoặc `t3.small` dự phòng).
 
 ---
 
@@ -67,7 +67,7 @@ Lý do:
   * Ranh giới phân chia công việc cực kỳ rõ ràng: Dev phụ trách AI tập trung vào `ai-service` (prompt, schema, batching); Dev phụ trách hạ tầng tập trung vào `gateway` (auth, rate limit, quota).
   * Đáp ứng hoàn hảo tiêu chí đánh giá kiến trúc của ban giám khảo.
 * **Tiêu cực & Hạn chế (Negative):**
-  * Cần tối ưu JVM options (`-Xmx256m` cho mỗi service) để đảm bảo không bị tràn RAM (OOM) trên máy ảo 2GB RAM.
+  * Cần cấu hình JVM options hợp lý (`gateway`: `-Xmx256m`, `ai-service`: `-Xmx384m`) để hệ thống hoạt động ổn định và an toàn trên EC2 `t3.medium` (hoặc `t3.small` dự phòng có 2GB swap).
 * **Rủi ro & Giảm thiểu (Risks & Mitigations):**
   * *Rủi ro:* Cấu hình mạng Docker Compose bị lỗi khiến `gateway` không gọi được `ai-service`.
   * *Giảm thiểu:* Dùng chung bridge network `remora-net` với DNS nội bộ theo tên service (`http://ai-service:8082`).

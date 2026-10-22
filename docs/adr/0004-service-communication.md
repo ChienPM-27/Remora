@@ -1,8 +1,8 @@
 ---
 title: "ADR 0004: Cơ chế Giao tiếp Liên Dịch vụ (Synchronous HTTP vs Message Queue/gRPC)"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["docs/architecture/01-context-and-containers.md", "services/gateway"]
 ---
 
@@ -20,7 +20,7 @@ related_code: ["docs/architecture/01-context-and-containers.md", "services/gatew
 Hệ thống backend Remora bao gồm `gateway` tiếp nhận yêu cầu từ client và `ai-service` thực thi các cuộc gọi tới Gemini API. Nhóm cần xác định giao thức và cơ chế truyền thông nội bộ giữa các microservices (Service-to-Service Communication).
 Ràng buộc:
 - Thời gian thi đấu 24 giờ.
-- Tài nguyên máy chủ ảo có hạn (AWS EC2 `t3.small`: 2 vCPU, 2GB RAM).
+- Tài nguyên máy chủ ảo có hạn: máy ảo demo AWS EC2 `t3.medium` (2 vCPU, 4GB RAM) hoặc `t3.small` dự phòng.
 - Luồng trích xuất thẻ học và Resurfacing đòi hỏi phản hồi có kết quả để client cập nhật trạng thái thẻ từ `PENDING` sang `DONE`.
 
 ---
@@ -69,7 +69,7 @@ Các nguyên tắc áp dụng:
 
 * **Tích cực (Positive):**
   * Giảm thiểu tối đa số lượng thành phần phải cài đặt trên Docker Compose (chỉ có 3 container: `gateway`, `ai-service`, `postgres`).
-  * Giữ mức sử dụng RAM toàn hệ thống dưới 1GB, đảm bảo máy ảo `t3.small` hoạt động mát mẻ, không bao giờ bị đứng máy.
+  * Giữ mức sử dụng RAM toàn hệ thống ở mức an toàn (~1.5GB - 1.8GB đỉnh điểm), vận hành ổn định trên `t3.medium` và không gây sập máy ảo.
 * **Tiêu cực & Hạn chế (Negative):**
   * Cần xử lý cẩn thận các trường hợp timeout và lỗi mạng tại `gateway` để trả về mã lỗi HTTP chuẩn RFC 9457 cho client xử lý retry.
 * **Rủi ro & Giảm thiểu (Risks & Mitigations):**

@@ -1,8 +1,8 @@
 ---
 title: "Remora Deployment Environments & Configuration Guide"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["services/gateway", "services/ai-service", "docs/adr/0003-cloud-deployment-ec2-vs-azure.md"]
 ---
 

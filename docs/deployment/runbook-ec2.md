@@ -1,14 +1,14 @@
 ---
 title: "Remora AWS EC2 Deployment Runbook"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["docs/adr/0003-cloud-deployment-ec2-vs-azure.md", "deployment/environments.md"]
 ---
 
 # Runbook Triển khai AWS EC2 cho Remora Backend
 
-Tài liệu hướng dẫn từng bước (Step-by-Step Runbook) để thiết lập, triển khai, kiểm thử và xử lý sự cố cho Remora Backend trên máy ảo AWS EC2 `t3.small` phục vụ ngày thi đấu Hackathon 24h.
+Tài liệu hướng dẫn từng bước (Step-by-Step Runbook) để thiết lập, triển khai, kiểm thử và xử lý sự cố cho Remora Backend trên máy ảo AWS EC2 `t3.medium` (hoặc `t3.small` dự phòng) phục vụ ngày thi đấu Hackathon 24h theo quyết định tại [docs/decisions.md](../decisions.md) mục 3.
 
 ---
 
@@ -16,10 +16,10 @@ Tài liệu hướng dẫn từng bước (Step-by-Step Runbook) để thiết l
 
 1. **Tài khoản AWS:** Có quyền tạo EC2 Instance tại region gần Việt Nam (khuyến nghị `ap-southeast-1` Singapore để có độ trễ < 40ms `[VERIFY]`).
 2. **Cấu hình Máy ảo EC2:**
-   - **Loại Instance:** `t3.small` (x86, 2 vCPU, 2GB RAM).
+   - **Loại Instance:** Cấu hình chính thức cho demo: `t3.medium` (x86, 2 vCPU, 4GB RAM) để đảm bảo an toàn tuyệt đối trước nguy cơ OOM killer. Cấu hình dự phòng: `t3.small` (x86, 2 vCPU, 2GB RAM, kèm bắt buộc tạo 2GB Swap).
    - **Hệ điều hành:** Ubuntu Server 24.04 LTS (HVM), SSD Volume Type.
    - **Ổ cứng (EBS):** 20GB gp3 General Purpose SSD.
-   - **Ước tính chi phí `[VERIFY]`:** ~$0.0208/giờ (khoảng $0.50 cho 24h thi đấu) `[VERIFY]`.
+   - **Ước tính chi phí `[VERIFY]`:** `t3.medium` ~$0.0464/giờ (~$1.11 cho 24h thi đấu); `t3.small` ~$0.0208/giờ (~$0.50 cho 24h thi đấu) `[VERIFY]`.
 3. **Cấu hình Security Group (Inbound Rules Bảo Mật):**
    - Port `22` (SSH): **Chỉ cho phép dải IP của nhóm dev** (`<TEAM_PUBLIC_IP>/32`), tuyệt đối không mở `0.0.0.0/0`.
    - Port `80` (HTTP): Mở `0.0.0.0/0` (Dùng cho Caddy HTTP-01 challenge cấp chứng chỉ SSL và redirect sang 443).

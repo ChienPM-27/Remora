@@ -42,7 +42,7 @@ Backend (decided; formalized in `docs/adr/`):
 - PostgreSQL for accounts and usage only, initialized by SQL scripts, no migration tool in the MVP. The backend never stores images or `ocr_text`.
 - Deploy with Docker Compose on a single VM: EC2 `t3.small` (x86) unless ADR 0003 decides otherwise.
 
-Placeholders to fill: `applicationId = TODO`, `minSdk = TODO`, `PROXY_BASE_URL = TODO` (from `local.properties`, never committed).
+Placeholders to fill: `applicationId = com.remora`, `minSdk = 28`, `PROXY_BASE_URL = TODO` (from `local.properties`, never committed).
 
 ## 4. Data and contracts
 

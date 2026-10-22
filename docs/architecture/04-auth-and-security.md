@@ -1,8 +1,8 @@
 ---
 title: "Remora Authentication, Authorization & Security Architecture"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["services/gateway", "docs/adr/0002-auth-approach.md"]
 ---
 
@@ -154,7 +154,10 @@ Token do module `auth` bên trong `gateway` tự cấp phát (Self-issued JWT) c
 
 ## 6. Khuyến nghị Bảo mật Dữ liệu AI & Lựa chọn Gói Gemini `[VERIFY]`
 
-* **Điều khoản Quyền riêng tư Google AI Studio Free Tier `[VERIFY]`:** Theo chính sách của Google AI Studio, ở gói miễn phí (Free Tier), dữ liệu prompt và nội dung gửi lên có thể được Google ghi nhận và sử dụng để đánh giá chất lượng và cải thiện sản phẩm. Đồng thời, gói Free Tier bị giới hạn tốc độ nghiêm ngặt (15 RPM / 1.500 RPD).
-* **Khuyến nghị Vận hành Thực tế:** Để bảo vệ tuyệt đối dữ liệu học tập cá nhân của sinh viên và đảm bảo độ ổn định khi trình diễn demo trước ban giám khảo, nhóm **khuyến nghị bật Billing (Pay-as-you-go Paid Tier)** trên Google Cloud / AI Studio cho `GEMINI_API_KEY`:
-  1. **Bảo mật dữ liệu:** Ở gói Paid Tier, Google cam kết không sử dụng dữ liệu đầu vào/đầu ra của người dùng để huấn luyện mô hình.
-  2. **Tránh lỗi 429 khi Demo:** Gói Paid Tier có hạn mức RPM/TPM cao hơn rất nhiều lần, triệt tiêu nguy cơ bị nghẽn tốc độ khi nhiều người cùng trải nghiệm ứng dụng. Chi phí thực tế cho 50-100 ảnh demo chỉ tốn dưới $0.10 USD `[VERIFY]`.
+* **Điều khoản Quyền riêng tư & Hạn ngạch Google AI Studio Free Tier:**
+  - Theo chính sách của Google AI Studio, ở gói miễn phí (Free Tier), dữ liệu prompt và nội dung gửi lên có thể được Google ghi nhận và sử dụng để đánh giá chất lượng và cải thiện sản phẩm.
+  - Về hạn ngạch tốc độ: Theo kết quả đo đạc thực tế ngày 2026-10-22 (nguồn: [docs/decisions.md](../decisions.md) mục 1.1), gói Free Tier có hạn ngạch thực tế cho `gemini-3.5-flash` là **5 RPM** và **20 RPD (requests/day)** (chạm lỗi 429 khi gọi liên tiếp hoặc quá 20 lượt/ngày), trong khi `gemini-3.5-flash-lite` có hạn ngạch rộng hơn và độ trễ thấp hơn nhiều.
+* **Điểm cần nhóm thảo luận và quyết định (Bật Paid Tier hay giữ Free Tier):**
+  - **Quyền riêng tư:** Ở gói Paid Tier (Pay-as-you-go), Google cam kết không sử dụng dữ liệu đầu vào/đầu ra để huấn luyện mô hình.
+  - **Hạn mức khi Demo:** Gói Paid Tier nâng cao trần RPM/TPM, hạn chế tối đa lỗi 429 khi demo trực tiếp trước ban giám khảo.
+  - **Quyết định:** Đây là điểm nhóm cần chính thức quyết định (bật Paid Tier hay tiếp tục sử dụng Free Tier kết hợp model chính `gemini-3.5-flash-lite`), không tự ý quyết định thay nhóm. Chi phí ước tính nếu bật Paid Tier cho 50-100 ảnh demo chỉ tốn dưới $0.10 USD `[VERIFY]`.

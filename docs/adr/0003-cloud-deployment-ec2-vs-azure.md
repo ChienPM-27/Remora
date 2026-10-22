@@ -1,18 +1,18 @@
 ---
 title: "ADR 0003: Lựa chọn Nền tảng Đám mây (AWS EC2 vs Microsoft Azure)"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
-related_code: ["AGENTS.md", "docs/deployment/runbook-ec2.md"]
+last_verified: 2026-10-22
+related_code: ["AGENTS.md", "docs/deployment/runbook-ec2.md", "docs/decisions.md"]
 ---
 
 # 0003. Lựa chọn Nền tảng Đám mây: AWS EC2 vs Microsoft Azure cho Bản Demo 24h
 
 * **Trạng thái (Status):** Accepted
-* **Lựa chọn chính thức (Chosen):** AWS EC2 `t3.small` (x86)
+* **Lựa chọn chính thức (Chosen):** AWS EC2 `t3.medium` (x86) cho Demo; `t3.small` là dự phòng
 * **Chủ sở hữu (Owner):** Lead
-* **Ngày quyết định (Date):** 2026-10-21
-* **Tài liệu liên quan:** [`AGENTS.md`](../../AGENTS.md), [`01-context-and-containers.md`](../architecture/01-context-and-containers.md), [`runbook-ec2.md`](../deployment/runbook-ec2.md)
+* **Ngày quyết định (Date):** 2026-10-21 (Cập nhật: 2026-10-22)
+* **Tài liệu liên quan:** [`AGENTS.md`](../../AGENTS.md), [`01-context-and-containers.md`](../architecture/01-context-and-containers.md), [`runbook-ec2.md`](../deployment/runbook-ec2.md), [`decisions.md`](../decisions.md)
 
 ---
 
@@ -62,11 +62,16 @@ Yêu cầu:
 
 ## 3. Quyết định (Decision)
 
-Lựa chọn chính thức: **Phương án A (AWS EC2 `t3.small` x86 chạy Docker Compose)** được chọn làm môi trường staging/demo chính thức cho Remora.
+Lựa chọn chính thức: **Phương án A (AWS EC2 x86 chạy Docker Compose)** được chọn làm môi trường staging/demo cho Remora.
+
+### Cập nhật (2026-10-22): Chốt `t3.medium` cho buổi Demo, `t3.small` là dự phòng
+Theo quyết định chính thức tại [docs/decisions.md](../decisions.md) mục 3:
+- **Cấu hình Demo chính thức:** AWS EC2 `t3.medium` (2 vCPU, 4GB RAM) được chọn cho buổi thuyết trình trước ban giám khảo. Lý do: Hệ thống gồm 4 container (`caddy`, `gateway` Ktor JVM, `ai-service` Ktor JVM, `postgres:16-alpine`), mức tiêu thụ RAM đỉnh (JVM heap + metaspace + PostgreSQL buffer cache) đạt ~1.5GB - 1.8GB, dễ gây OOM killer trên máy 2GB nếu không có đủ swap space.
+- **Phương án dự phòng:** `t3.small` (2 vCPU, 2GB RAM) chỉ dùng khi cần tiết kiệm chi phí tối đa, bắt buộc phải giảm `mem_limit` (`gateway`: 384m, `ai-service`: 512m, `postgres`: 256m) và tạo 2GB Swapfile theo [runbook-ec2.md](../deployment/runbook-ec2.md).
 
 Lý do lựa chọn:
 1. Tối ưu thời gian triển khai trong 24h: Thiết lập xong trong 30 phút, ít rủi ro cấu hình mạng phức tạp.
-2. Chi phí kiểm soát được: Chưa tới $1 USD cho toàn bộ ngày thi đấu.
+2. Chi phí kiểm soát được: Chỉ xấp xỉ ~$1.10 - $1.30 USD cho toàn bộ ngày thi đấu trên `t3.medium`.
 3. Không bị cold-start: Đảm bảo độ trễ ổn định khi trình diễn tính năng trước ban giám khảo.
 
 ---

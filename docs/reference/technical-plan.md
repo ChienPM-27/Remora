@@ -1,9 +1,9 @@
 ---
 title: Remora Technical Plan (reference)
 status: reference
-owner: TODO
-last_verified: 2026-10-21
-related_code: []
+owner: "Lead"
+last_verified: 2026-10-22
+related_code: ["AGENTS.md", "docs/decisions.md"]
 ---
 
 # Remora Technical Plan
@@ -44,12 +44,12 @@ Nếu trễ từ 2 giờ trở lên tại mốc h12, cắt **từ dưới lên**
 | Stack backend | Kotlin + Ktor, Gradle build riêng dưới `services/`, monorepo | Chốt |
 | Topology | `gateway` (kèm auth tối thiểu) + `ai-service`; `core-service` sau MVP; backend không lưu ảnh và `ocr_text` | Chốt |
 | Database backend | PostgreSQL cho tài khoản và quota; init SQL, không Flyway ở MVP | Chốt |
-| Cloud | EC2 `t3.small` (x86) với Docker Compose | Chốt tạm, ADR 0003 xác nhận |
+| Cloud | EC2 `t3.medium` (x86) cho demo, `t3.small` dự phòng với Docker Compose | Đã chốt (ADR 0003, decisions.md mục 3) |
 | Xác thực | Self-issued JWT; MVP dùng tài khoản demo, đăng nhập đầy đủ là P1 (36) | Chốt |
 | Hợp đồng chuẩn | `group`: SIMILAR / COMPLEMENTARY / ACTIONABLE; `relation`: DUPLICATE / SUPPLEMENT / EXPLANATION / CONTRADICTION; thêm `content_type` vào JSON trích xuất | Chốt |
 | OCR và trạng thái | Gemini OCR trong một lần gọi, không ML Kit; `status` Room: PENDING / DONE / FAILED; cần cập nhật `:core:model` | Chốt |
 | DTO | OpenAPI là hợp đồng duy nhất, không dùng chung `:core:model` trực tiếp (kiểm tra loại module) | Chốt |
-| Embedding dimension | Chốt một giá trị một lần, đặt trong cấu hình | `[DECISION-NEEDED]` |
+| Embedding dimension | Chốt 768 chiều (`outputDimensionality = 768`), xem decisions.md mục 1.5 | Chốt |
 
 ## 5. Danh sách công việc theo mốc
 
@@ -77,9 +77,9 @@ Nếu trễ từ 2 giờ trở lên tại mốc h12, cắt **từ dưới lên**
 | ID | Hạng mục và cách làm | Công nghệ | Tiêu chí hoàn thành | Ưu | Phụ thuộc | Owner |
 | --- | --- | --- | --- | --- | --- | --- |
 | 7 | Hàng đợi AI nền: ràng buộc mạng, retry backoff có giới hạn số lần | WorkManager, Coroutines | Mất mạng không làm mất yêu cầu pending; 429 được xếp lại | P0 | 6, 18 | CAP |
-| 8 | Trích xuất thẻ nhớ: gửi ảnh chỉ sau khi Lưu, nhận JSON gồm `title`, `summary`, `tags`, `content_type`, `ocr_text`; validate đầu ra. Model ID: `gemini-3.5-flash` (đã kiểm tra có trong danh sách của Google ngày 2026-10-21; **xác nhận lại bằng một request thật**) | Gemini API, JSON schema | Ảnh thành thẻ nhớ đủ trường; JSON lỗi có fallback | P0 | 9, 18 | AI |
+| 8 | Trích xuất thẻ nhớ: gửi ảnh chỉ sau khi Lưu, nhận JSON gồm `title`, `summary`, `tags`, `content_type`, `ocr_text`; validate đầu ra. Model: `gemini-3.5-flash-lite` (chính), `gemini-3.5-flash` (dự phòng); đã kiểm chứng thực tế ngày 2026-10-22 (xem decisions.md mục 1) | Gemini API, JSON schema | Ảnh thành thẻ nhớ đủ trường; JSON lỗi có fallback | P0 | 9, 18 | AI |
 | 9 | Chuẩn hóa prompt và schema: kiểu dữ liệu bắt buộc, xử lý trường thiếu hoặc sai; lưu ảnh với tag “chưa phân loại” khi cần; prompt có version | JSON schema, kotlinx.serialization hoặc Moshi (chọn một) | Parser có unit test cho JSON hợp lệ, thiếu trường, sai định dạng | P0 | none | AI |
-| 10 | Sinh embedding từ `user_intent`, tags, summary, `ocr_text` (cắt độ dài cố định); chuẩn hóa L2 trước khi lưu. Model: `gemini-embedding-2` (**xác minh**, kiểm tra output dimension và task type). Không benchmark nhiều model trong 24h; để model ID trong cấu hình để đổi nhanh | Gemini Embedding API | Embedding được sinh, chuẩn hóa và lưu cùng thẻ | P0 | 8, 18 | AI |
+| 10 | Sinh embedding từ `user_intent`, tags, summary, `ocr_text` (cắt độ dài cố định); chuẩn hóa L2 trước khi lưu. Model: `gemini-embedding-2` (đã kiểm chứng 768d, taskType RETRIEVAL_DOCUMENT / RETRIEVAL_QUERY, xem decisions.md mục 1.5). Để model ID trong cấu hình để đổi nhanh | Gemini Embedding API | Embedding được sinh, chuẩn hóa và lưu cùng thẻ | P0 | 8, 18 | AI |
 | 11 | Lưu vector: float32 little-endian liên tục vào BLOB; encode/decode; kiểm tra kích thước khi giải mã | Room, ByteBuffer | Round-trip không sai lệch; có unit test | P0 | 6, 10 | CAP |
 | 12 | Tìm bằng ngữ nghĩa: embed truy vấn, cosine với vector đã lưu, ngưỡng relevance (trả “không tìm thấy” thay vì kết quả rác), làm nổi bật `user_intent` | Kotlin, Room | Truy vấn mẫu như “slide phân phối chuẩn hôm bữa chụp” ra đúng ảnh trong bộ demo | P0 | 10, 11, 13 | AI |
 | 13 | **(Nâng lên P0)** Tách mốc thời gian mơ hồ. **Bản rẻ trước:** regex cho “hôm qua”, “tuần trước”, “hôm bữa” (mặc định 2–3 tuần); lọc `created_at` trước cosine. Bản dùng LLM chỉ là P1 | Kotlin Date/Time | Các câu truy vấn thời gian trong test case ra đúng khoảng ngày; chốt timezone | P0 | 6 | CAP |
@@ -130,10 +130,10 @@ Nếu trễ từ 2 giờ trở lên tại mốc h12, cắt **từ dưới lên**
 | Capture | MediaStore + ContentObserver; content-URI trigger hoặc foreground service nếu bị kill | Phát hiện screenshot | MVP, kiểm thử trên máy thật |
 | Nền | WorkManager + Coroutines | AI nền, retry, pending | MVP |
 | CSDL cục bộ | Room (SQLite) | `memory_card`, `resurfacing_result`, `app_setting` | MVP |
-| Vision, OCR, tóm tắt | `gemini-3.5-flash` | Phân tích ảnh, trả JSON | `[VERIFY]` bằng request thật |
-| Embedding | `gemini-embedding-2` | Vector cho nội dung và truy vấn | `[VERIFY]` dimension, task type |
+| Vision, OCR, tóm tắt | `gemini-3.5-flash-lite` (chính), `gemini-3.5-flash` (dự phòng) | Phân tích ảnh, trả JSON | Đã kiểm chứng (xem decisions.md mục 1) |
+| Embedding | `gemini-embedding-2` | Vector cho nội dung và truy vấn (chốt 768d) | Đã kiểm chứng (xem decisions.md mục 1.5) |
 | Vector | Cosine + float32 BLOB | Top-k trên thiết bị | MVP |
-| Gateway / AI service | Kotlin + Ktor (`gateway`, `ai-service`), Docker Compose, EC2 `t3.small` (x86) | Giữ khóa, rate limit, log, xác thực | Đã chốt (ADR 0003 xác nhận cloud) |
+| Gateway / AI service | Kotlin + Ktor (`gateway`, `ai-service`), Docker Compose, EC2 `t3.medium` (x86) cho demo, `t3.small` dự phòng | Giữ khóa, rate limit, log, xác thực | Đã chốt (ADR 0003, decisions.md mục 3) |
 | Backend DB | PostgreSQL (tài khoản, quota), init SQL, không migration tool ở MVP | Dữ liệu tài khoản và mức sử dụng | Đã chốt |
 | Logging | Timber + log có cấu trúc tại backend | Log theo id, không ghi nội dung | MVP |
 | Crash monitoring | Firebase Crashlytics | Theo dõi crash | Tùy chọn |
@@ -175,5 +175,8 @@ Nếu trễ từ 2 giờ trở lên tại mốc h12, cắt **từ dưới lên**
 
 ## 9. Thông tin đã xác minh
 
-- Ngày 2026-10-21, theo trang deprecations của Google AI (`ai.google.dev/gemini-api/docs/deprecations`): `gemini-2.5-flash` có lịch ngừng 2026-10-16, thay thế là `gemini-3.5-flash`; `gemini-embedding-001` có lịch ngừng 2026-07-14, thay thế là `gemini-embedding-2`. Các trang của Google Cloud (Vertex) liệt kê khác nhau, nên xác nhận lại bằng một request thật trên đúng nền tảng nhóm dùng.
-- Tên tham số thinking level của Gemini 3 và việc `gemini-embedding-2` hỗ trợ output dimension, task type chưa được kiểm tra: `[VERIFY]` trước khi dùng.
+- Ngày 2026-10-21, theo trang deprecations của Google AI (`ai.google.dev/gemini-api/docs/deprecations`): các dòng cũ như `gemini-2.5-flash` có kế hoạch ngừng, thay thế bằng thế hệ mới `gemini-3.5-flash-lite` (chính) và `gemini-3.5-flash` (dự phòng); `gemini-embedding-001` được thay thế bằng `gemini-embedding-2`.
+- Ngày 2026-10-22, đã đo đạc kiểm chứng thực tế qua request thật (xem chi tiết tại [docs/decisions.md](../decisions.md) mục 1):
+  - Model vision/extraction: `gemini-3.5-flash-lite` (chính, P50 1.15s, OCR chính xác 99.8%, không nghẽn hạn ngạch); fallback là `gemini-3.5-flash`.
+  - Model embedding: `gemini-embedding-2` đã kiểm chứng hỗ trợ `outputDimensionality = 768` và các `taskType` (`RETRIEVAL_DOCUMENT` / `RETRIEVAL_QUERY`).
+  - Hạ tầng demo: EC2 `t3.medium` cho demo, `t3.small` là dự phòng (xem ADR 0003, decisions.md mục 3).

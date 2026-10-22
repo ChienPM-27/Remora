@@ -1,8 +1,8 @@
 ---
 title: "Remora Architecture: System Context & Containers (C4)"
-status: PLANNED
+status: ACCEPTED
 owner: "Lead"
-last_verified: 2026-10-21
+last_verified: 2026-10-22
 related_code: ["app", "services/gateway", "services/ai-service", "core/model"]
 ---
 
@@ -53,7 +53,7 @@ flowchart TB
         end
     end
 
-    subgraph CloudBackend ["Máy chủ Backend (AWS EC2 t3.small)"]
+    subgraph CloudBackend ["Máy chủ Backend (AWS EC2 t3.medium cho demo / t3.small dự phòng)"]
         TLSTerminator["caddy [Container: Caddy 2 Reverse Proxy]\n[PLANNED]\n- Port 80, 443 (Public Internet)\n- Automatic HTTPS (Let's Encrypt / ZeroSSL)\n- Domain: <DOMAIN> (hoặc DuckDNS / Dynamic DNS)\n- Chuyển tiếp HTTPS -> HTTP gateway:8080"]
 
         subgraph DockerComposeHost ["Docker Compose Network (remora-net)"]
@@ -68,7 +68,7 @@ flowchart TB
     end
 
     subgraph ExternalServices ["Dịch vụ bên ngoài"]
-        GeminiPlatform["Google Gemini API\n- Vision / OCR / Summary: gemini-3.5-flash\n- Embeddings: gemini-embedding-2"]
+        GeminiPlatform["Google Gemini API\n- Vision / OCR / Summary: gemini-3.5-flash-lite (chính), gemini-3.5-flash (dự phòng)\n- Embeddings: gemini-embedding-2"]
     end
 
     %% Tương tác Client

@@ -135,3 +135,18 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 
 * **Kiểu dữ liệu Nullable:** Chuyển đổi toàn bộ cú pháp `nullable: true` (OpenAPI 3.0) thành cú pháp chuẩn OpenAPI 3.1: `type: [string, "null"]`.
 * **Kiểm định Linting:** Toàn bộ file hợp đồng trong `services/gateway/openapi.yaml` và `services/ai-service/openapi.yaml` phải vượt qua bộ quy tắc của Stoplight Spectral (`npx @stoplight/spectral-cli lint`) với mức độ cảnh báo `warn` trở lên trước khi merge.
+
+---
+
+## 5. Changelog Docs (2026-10-22)
+
+* **Đồng bộ Mô hình AI:**
+  - Cập nhật toàn bộ tài liệu kiến trúc (`00-overview.md`, `01-context-and-containers.md`, `02-services-catalog.md`, `technical-plan.md`): mô hình vision chính là `gemini-3.5-flash-lite`, mô hình dự phòng là `gemini-3.5-flash`.
+  - Loại bỏ các tham chiếu tới `gemini-2.5` cũ; bỏ nhãn `[DECISION-NEEDED]` cho vector embedding dimension (đã chốt 768 chiều với `gemini-embedding-2`).
+* **Cập nhật Hạn ngạch Thực tế (Free Tier Quota):**
+  - Cập nhật `04-auth-and-security.md` và `07-scalability-and-cost.md`: thay số liệu 15 RPM / 1.500 RPD bằng số liệu đo đạc thực nghiệm từ API key ngày 2026-10-22 (5 RPM / 20 RPD cho `gemini-3.5-flash`).
+  - Ghi nhận cảnh báo quyền riêng tư của Free Tier và đánh dấu là điểm cần nhóm quyết định (bật Paid Tier hay không).
+* **Đồng bộ Hạ tầng Máy chủ Demo:**
+  - Cập nhật ADR 0003, ADR 0001, ADR 0004, `runbook-ec2.md`, `07-scalability-and-cost.md`, `environments.md`: chốt AWS EC2 `t3.medium` (4GB RAM) làm hạ tầng chính thức cho buổi demo; `t3.small` (2GB RAM) là phương án dự phòng.
+* **Cập nhật Trạng thái Tài liệu:**
+  - Cập nhật `last_verified: 2026-10-22` và chuyển trạng thái `status: ACCEPTED` cho các tài liệu kiến trúc đã được kiểm chứng thực tế.
