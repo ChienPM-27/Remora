@@ -8,66 +8,111 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import com.remora.data.local.RemoraDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 class ScreenshotObserver(
     private val context: Context,
+    private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     private val onScreenshotDetected: (imageUri: Uri, imagePath: String?) -> Unit
 ) : ContentObserver(Handler(Looper.getMainLooper())) {
 
+    private var lastHandledMediaId: Long = -1L
     private var lastHandledTimestamp: Long = 0L
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
-        handleMediaChange(uri)
+        handleMediaChange()
     }
 
-    private fun handleMediaChange(targetUri: Uri?) {
+    private fun handleMediaChange() {
         val now = System.currentTimeMillis()
         if (now - lastHandledTimestamp < 800L) {
-            // Debounce rapid multiple OS notifications
+            // Debounce rapid multiple OS content notifications
             return
         }
 
-        try {
-            val projection = arrayOf(
-                MediaStore.Images.Media._ID,
-                MediaStore.Images.Media.DISPLAY_NAME,
-                MediaStore.Images.Media.DATE_ADDED,
+        scope.launch {
+            try {
+                // 1. Check if monitoring is paused by user in AppSetting
+                val db = RemoraDatabase.getInstance(context)
+                val setting = db.appSettingDao().getSetting()
+                if (setting?.paused == true) {
+                    Timber.d("Screenshot capture ignored: user has paused monitoring.")
+                    return@launch
+                }
+
+                val projectionList = mutableListOf(
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    MediaStore.Images.Media.DATE_ADDED
+                )
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    MediaStore.Images.Media.RELATIVE_PATH
+                    projectionList.add(MediaStore.Images.Media.RELATIVE_PATH)
+                    projectionList.add(MediaStore.Images.Media.IS_PENDING)
                 } else {
-                    MediaStore.Images.Media.DATA
+                    projectionList.add(MediaStore.Images.Media.DATA)
                 }
-            )
 
-            val queryUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-            val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+                val projection = projectionList.toTypedArray()
+                val queryUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
 
-            context.contentResolver.query(queryUri, projection, null, null, sortOrder)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                    val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
-                    val pathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        cursor.getColumnIndexOrThrow(MediaStore.Images.Media.RELATIVE_PATH)
-                    } else {
-                        cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA)
-                    }
+                context.contentResolver.query(queryUri, projection, null, null, sortOrder)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                        val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+                        val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
 
-                    val id = cursor.getLong(idCol)
-                    val displayName = cursor.getString(nameCol) ?: ""
-                    val pathOrData = cursor.getString(pathCol) ?: ""
+                        val id = cursor.getLong(idCol)
 
-                    if (isScreenshot(pathOrData, displayName)) {
-                        lastHandledTimestamp = now
-                        val imageUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
-                        Timber.i("Screenshot detected: uri=$imageUri, name=$displayName")
-                        onScreenshotDetected(imageUri, pathOrData)
+                        // 2. Anti-duplication by Media ID
+                        if (id == lastHandledMediaId) {
+                            return@use
+                        }
+
+                        // 3. Check IS_PENDING on Android 10+ (file still being written by OS)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val isPendingCol = cursor.getColumnIndex(MediaStore.Images.Media.IS_PENDING)
+                            if (isPendingCol != -1 && cursor.getInt(isPendingCol) == 1) {
+                                Timber.d("Image #$id is still IS_PENDING, waiting for next event...")
+                                return@use
+                            }
+                        }
+
+                        // 4. Limit to photos taken/added within the last 30 seconds
+                        val dateAddedSeconds = cursor.getLong(dateAddedCol)
+                        val nowSeconds = System.currentTimeMillis() / 1000L
+                        if (nowSeconds - dateAddedSeconds > 30L) {
+                            // Historical photo, ignore
+                            return@use
+                        }
+
+                        val displayName = cursor.getString(nameCol) ?: ""
+                        val pathOrData = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val pathCol = cursor.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH)
+                            if (pathCol != -1) cursor.getString(pathCol) ?: "" else ""
+                        } else {
+                            val dataCol = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                            if (dataCol != -1) cursor.getString(dataCol) ?: "" else ""
+                        }
+
+                        if (isScreenshot(pathOrData, displayName)) {
+                            lastHandledMediaId = id
+                            lastHandledTimestamp = now
+                            val imageUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                            Timber.i("Fresh screenshot detected: id=$id, uri=$imageUri, name=$displayName")
+                            onScreenshotDetected(imageUri, pathOrData)
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Timber.e(e, "Error processing MediaStore screenshot change")
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Error processing MediaStore change")
         }
     }
 
@@ -76,6 +121,7 @@ class ScreenshotObserver(
         val lowerName = name.lowercase()
         return lowerPath.contains("screenshot") ||
                 lowerName.contains("screenshot") ||
-                lowerName.startsWith("scr_")
+                lowerName.startsWith("scr_") ||
+                lowerName.contains("chụp màn hình")
     }
 }
