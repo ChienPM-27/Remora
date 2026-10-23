@@ -9,6 +9,8 @@ import com.remora.ai.model.ExtractCardResponseDto
 import com.remora.ai.model.ResurfaceBatchRequestDto
 import com.remora.ai.model.ResurfaceBatchResponseDto
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -34,51 +36,107 @@ class ApiException(
 }
 
 class AiGatewayClient(
-    private val baseUrl: String = BuildConfig.PROXY_BASE_URL
-) {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
-    private val client = OkHttpClient.Builder()
+    private val baseUrl: String = BuildConfig.PROXY_BASE_URL,
+    private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
         .writeTimeout(25, TimeUnit.SECONDS)
         .build()
+) {
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     @Volatile
     private var cachedToken: String? = null
+    private val authMutex = Mutex()
 
-    private suspend fun getOrRefreshToken(): String = withContext(Dispatchers.IO) {
-        cachedToken?.let { return@withContext it }
+    suspend fun getValidToken(forceRefresh: Boolean = false): String? = authMutex.withLock {
+        if (!forceRefresh && !cachedToken.isNullOrBlank()) {
+            return cachedToken
+        }
 
-        val loginPayload = json.encodeToString(AuthLoginRequest())
-        val request = Request.Builder()
-            .url("$baseUrl/auth/login-demo")
-            .post(loginPayload.toRequestBody("application/json".toMediaType()))
-            .build()
+        val username = BuildConfig.DEMO_USERNAME
+        val password = BuildConfig.DEMO_PASSWORD
+        if (username.isBlank() || password.isBlank()) {
+            Timber.e("No demo credentials configured in BuildConfig (DEMO_USERNAME/DEMO_PASSWORD)")
+            return null
+        }
 
+        return withContext(Dispatchers.IO) {
+            val loginPayload = json.encodeToString(AuthLoginRequest(username = username, password = password))
+            val request = Request.Builder()
+                .url("$baseUrl/auth/login-demo")
+                .post(loginPayload.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val body = response.body?.string() ?: ""
+                        val auth = json.decodeFromString<AuthTokenResponse>(body)
+                        cachedToken = auth.access_token
+                        auth.access_token
+                    } else {
+                        Timber.w("Failed to authenticate demo user: HTTP ${response.code}")
+                        cachedToken = null
+                        null
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error during login-demo call")
+                cachedToken = null
+                null
+            }
+        }
+    }
+
+    private suspend fun <T> executeRequestWithAuth(
+        buildRequest: (token: String) -> Request,
+        parseResponse: (String) -> T
+    ): Result<T> = withContext(Dispatchers.IO) {
+        // Enforce: Never send request without a valid token
+        val initialToken = getValidToken(forceRefresh = false)
+            ?: return@withContext Result.failure(
+                ApiException(401, "No auth token: credentials missing or authentication failed")
+            )
+
+        var request = buildRequest(initialToken)
         try {
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
-                    val auth = json.decodeFromString<AuthTokenResponse>(body)
-                    cachedToken = auth.access_token
-                    auth.access_token
+            var response = client.newCall(request).execute()
+
+            // Enforce: Auto re-login once on 401 Unauthorized
+            if (response.code == 401) {
+                response.close()
+                Timber.w("Received 401 Unauthorized. Refreshing token and retrying...")
+                val refreshedToken = getValidToken(forceRefresh = true)
+                    ?: return@withContext Result.failure(
+                        ApiException(401, "Re-authentication failed after 401")
+                    )
+                request = buildRequest(refreshedToken)
+                response = client.newCall(request).execute()
+            }
+
+            response.use { resp ->
+                if (resp.isSuccessful) {
+                    val body = resp.body?.string() ?: ""
+                    Result.success(parseResponse(body))
                 } else {
-                    Timber.w("Failed to authenticate demo user: HTTP ${response.code}")
-                    ""
+                    val retryAfter = resp.header("Retry-After")?.toLongOrNull()
+                    val errBody = resp.body?.string() ?: ""
+                    Result.failure(
+                        ApiException(resp.code, "Request failed HTTP ${resp.code}: $errBody", retryAfter)
+                    )
                 }
             }
         } catch (e: Exception) {
-            Timber.e(e, "Error during login-demo call")
-            ""
+            Timber.e(e, "Network error during AI request")
+            Result.failure(e)
         }
     }
 
     suspend fun extractCard(
         imageBytes: ByteArray,
         userIntent: String?
-    ): Result<ExtractCardResponseDto> = withContext(Dispatchers.IO) {
-        val token = getOrRefreshToken()
-
+    ): Result<ExtractCardResponseDto> {
         val multipartBuilder = MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart(
                 "image",
@@ -90,90 +148,62 @@ class AiGatewayClient(
             multipartBuilder.addFormDataPart("user_intent", userIntent)
         }
 
-        val request = Request.Builder()
-            .url("$baseUrl/ai/extract-card")
-            .apply {
-                if (token.isNotEmpty()) header("Authorization", "Bearer $token")
-            }
-            .post(multipartBuilder.build())
-            .build()
+        val requestBody = multipartBuilder.build()
 
-        try {
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
-                    Result.success(json.decodeFromString<ExtractCardResponseDto>(body))
-                } else {
-                    val retryAfter = response.header("Retry-After")?.toLongOrNull()
-                    val errBody = response.body?.string() ?: ""
-                    Result.failure(ApiException(response.code, "Extract card failed HTTP ${response.code}: $errBody", retryAfter))
-                }
+        return executeRequestWithAuth(
+            buildRequest = { token ->
+                Request.Builder()
+                    .url("$baseUrl/ai/extract-card")
+                    .header("Authorization", "Bearer $token")
+                    .post(requestBody)
+                    .build()
+            },
+            parseResponse = { body ->
+                json.decodeFromString<ExtractCardResponseDto>(body)
             }
-        } catch (e: Exception) {
-            Timber.e(e, "Network error during extractCard")
-            Result.failure(e)
-        }
+        )
     }
 
     suspend fun generateEmbedding(
         text: String,
         taskType: String = "RETRIEVAL_DOCUMENT"
-    ): Result<List<Float>> = withContext(Dispatchers.IO) {
-        val token = getOrRefreshToken()
+    ): Result<List<Float>> {
         val payload = json.encodeToString(EmbeddingRequestDto(text = text, task_type = taskType))
 
-        val request = Request.Builder()
-            .url("$baseUrl/ai/embeddings")
-            .apply {
-                if (token.isNotEmpty()) header("Authorization", "Bearer $token")
+        return executeRequestWithAuth(
+            buildRequest = { token ->
+                Request.Builder()
+                    .url("$baseUrl/ai/embeddings")
+                    .header("Authorization", "Bearer $token")
+                    .post(payload.toRequestBody("application/json".toMediaType()))
+                    .build()
+            },
+            parseResponse = { body ->
+                json.decodeFromString<EmbeddingResponseDto>(body).embedding
             }
-            .post(payload.toRequestBody("application/json".toMediaType()))
-            .build()
-
-        try {
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
-                    val result = json.decodeFromString<EmbeddingResponseDto>(body)
-                    Result.success(result.embedding)
-                } else {
-                    val retryAfter = response.header("Retry-After")?.toLongOrNull()
-                    val errBody = response.body?.string() ?: ""
-                    Result.failure(ApiException(response.code, "Embedding failed HTTP ${response.code}: $errBody", retryAfter))
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Network error during generateEmbedding")
-            Result.failure(e)
-        }
+        )
     }
 
     suspend fun evaluateResurfacing(
         batchRequest: ResurfaceBatchRequestDto
-    ): Result<ResurfaceBatchResponseDto> = withContext(Dispatchers.IO) {
-        val token = getOrRefreshToken()
+    ): Result<ResurfaceBatchResponseDto> {
         val payload = json.encodeToString(batchRequest)
 
-        val request = Request.Builder()
-            .url("$baseUrl/ai/resurface-batch")
-            .apply {
-                if (token.isNotEmpty()) header("Authorization", "Bearer $token")
+        return executeRequestWithAuth(
+            buildRequest = { token ->
+                Request.Builder()
+                    .url("$baseUrl/ai/resurface-batch")
+                    .header("Authorization", "Bearer $token")
+                    .post(payload.toRequestBody("application/json".toMediaType()))
+                    .build()
+            },
+            parseResponse = { body ->
+                json.decodeFromString<ResurfaceBatchResponseDto>(body)
             }
-            .post(payload.toRequestBody("application/json".toMediaType()))
-            .build()
+        )
+    }
 
-        try {
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val body = response.body?.string() ?: ""
-                    Result.success(json.decodeFromString<ResurfaceBatchResponseDto>(body))
-                } else {
-                    Result.failure(Exception("Resurface batch failed with HTTP ${response.code}"))
-                }
-            }
-        } catch (e: Exception) {
-            Timber.e(e, "Network error during evaluateResurfacing")
-            Result.failure(e)
-        }
+    fun invalidateToken() {
+        cachedToken = null
     }
 }

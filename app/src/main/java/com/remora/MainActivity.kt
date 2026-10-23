@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
         val app = application as RemoraApp
         val db = RemoraDatabase.getInstance(this)
         val cardRepo = app.container.cardRepository
-        val aiClient = AiGatewayClient()
+        val aiClient = app.container.aiGatewayClient
         val searchEngine = SemanticSearchEngine(db.memoryCardDao(), aiClient)
 
         val consentViewModel = ConsentViewModel(db.appSettingDao())

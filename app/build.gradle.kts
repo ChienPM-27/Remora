@@ -15,6 +15,8 @@ val localProperties = Properties().apply {
     }
 }
 val proxyBaseUrl: String = localProperties.getProperty("PROXY_BASE_URL") ?: "http://10.0.2.2:8080/v1"
+val demoUsername: String = localProperties.getProperty("DEMO_USERNAME") ?: ""
+val demoPassword: String = localProperties.getProperty("DEMO_PASSWORD") ?: ""
 
 android {
     namespace = "com.remora"
@@ -33,6 +35,8 @@ android {
         }
 
         buildConfigField("String", "PROXY_BASE_URL", "\"$proxyBaseUrl\"")
+        buildConfigField("String", "DEMO_USERNAME", "\"$demoUsername\"")
+        buildConfigField("String", "DEMO_PASSWORD", "\"$demoPassword\"")
     }
 
     buildTypes {

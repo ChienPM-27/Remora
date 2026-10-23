@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.remora.RemoraApp
 import com.remora.ai.AiGatewayClient
 import com.remora.ai.ApiException
 import com.remora.core.model.contract.VectorMath
@@ -46,8 +47,10 @@ class CardAnalyzeWorker(
                 return Result.failure()
             }
 
-            // 2. Extract card metadata via AI Gateway
-            val client = AiGatewayClient()
+            // 2. Extract card metadata via AI Gateway (singleton from AppContainer)
+            val remoraApp = applicationContext as? RemoraApp
+                ?: applicationContext.applicationContext as? RemoraApp
+            val client = remoraApp?.container?.aiGatewayClient ?: AiGatewayClient()
             val extractResult = client.extractCard(compressedBytes, card.userIntent)
 
             if (extractResult.isFailure) {
@@ -93,8 +96,7 @@ class CardAnalyzeWorker(
             Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
 
             // 6. Trigger Resurfacing pipeline and save results to Room
-            val app = applicationContext as? com.remora.RemoraApp
-            val resurfacingManager = app?.container?.resurfacingManager
+            val resurfacingManager = remoraApp?.container?.resurfacingManager
             if (resurfacingManager != null && updatedCard.embedding != null) {
                 try {
                     val resurfacedItems = resurfacingManager.runResurfacingPipeline(updatedCard)
