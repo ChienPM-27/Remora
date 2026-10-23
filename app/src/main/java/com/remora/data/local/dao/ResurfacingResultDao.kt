@@ -24,4 +24,7 @@ interface ResurfacingResultDao {
 
     @Query("DELETE FROM resurfacing_result WHERE new_card_id = :newCardId")
     suspend fun deleteResultsForCard(newCardId: Long)
+
+    @Query("DELETE FROM resurfacing_result")
+    suspend fun deleteAllResults()
 }

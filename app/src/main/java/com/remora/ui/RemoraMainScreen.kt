@@ -46,7 +46,6 @@ import com.remora.core.model.resurface.ResurfacedItem
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.AppSettingEntity
 import com.remora.data.local.entity.MemoryCardEntity
-import com.remora.data.seed.DemoDataSeeder
 import com.remora.ui.capture.SavePromptSheet
 import com.remora.ui.gallery.GalleryViewModel
 import com.remora.ui.resurfacing.ResurfacingScreen
@@ -257,10 +256,11 @@ fun RemoraMainScreen(
 
                 MainNavigationTab.SETTINGS -> {
                     SettingsScreen(
-                        onResetDemoData = {
+                        onClearAllCards = {
                             CoroutineScope(Dispatchers.IO).launch {
                                 val db = RemoraDatabase.getInstance(context)
-                                DemoDataSeeder.seedDemoCardsIfEmpty(context, db)
+                                db.memoryCardDao().deleteAllCards()
+                                db.resurfacingResultDao().deleteAllResults()
                             }
                         }
                     )

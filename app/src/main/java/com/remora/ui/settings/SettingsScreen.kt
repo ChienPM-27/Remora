@@ -50,11 +50,12 @@ import com.remora.ui.theme.RemoraSubtleText
 
 @Composable
 fun SettingsScreen(
-    onResetDemoData: () -> Unit,
+    onClearAllCards: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var autoDetectEnabled by remember { mutableStateOf(true) }
     var notificationEnabled by remember { mutableStateOf(true) }
+    var showConfirmClearDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -156,7 +157,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 3. Demo Data Action Card
+        // 3. Clear Data Action Card
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -165,13 +166,13 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(18.dp)) {
                 Text(
-                    text = "dữ liệu mẫu bài giảng",
+                    text = "quản lý bộ nhớ thẻ học",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = RemoraNavyDark
                 )
                 Text(
-                    text = "khôi phục các slide xác suất thống kê để demo và thử nghiệm tìm kiếm ngữ nghĩa.",
+                    text = "xóa toàn bộ các thẻ bài giảng và lịch sử liên kết tri thức để bắt đầu bộ nhớ mới.",
                     fontSize = 12.sp,
                     color = RemoraSubtleText
                 )
@@ -179,24 +180,49 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Button(
-                    onClick = onResetDemoData,
+                    onClick = { showConfirmClearDialog = true },
                     shape = RoundedCornerShape(percent = 50),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = RemoraNavyDark,
+                        containerColor = Color(0xFFEF4444),
                         contentColor = Color.White
                     ),
                     modifier = Modifier.fillMaxWidth().height(44.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Nạp lại",
+                        contentDescription = "Xóa sạch",
                         tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("nạp lại bộ bài giảng mẫu", fontSize = 14.sp)
+                    Text("xóa sạch toàn bộ thẻ đã lưu", fontSize = 14.sp)
                 }
             }
+        }
+
+        if (showConfirmClearDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showConfirmClearDialog = false },
+                title = { Text("Xác nhận xóa bộ nhớ?") },
+                text = { Text("Toàn bộ các thẻ ghi nhớ và kết quả gợi nhớ sẽ bị xóa hoàn toàn khỏi thiết bị.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            showConfirmClearDialog = false
+                            onClearAllCards()
+                        }
+                    ) {
+                        Text("Xóa hết", color = Color(0xFFEF4444))
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { showConfirmClearDialog = false }
+                    ) {
+                        Text("Hủy")
+                    }
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

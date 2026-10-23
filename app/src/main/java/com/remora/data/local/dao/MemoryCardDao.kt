@@ -37,4 +37,7 @@ interface MemoryCardDao {
 
     @Query("SELECT COUNT(*) FROM memory_card")
     suspend fun getCardCount(): Int
+
+    @Query("DELETE FROM memory_card")
+    suspend fun deleteAllCards()
 }

@@ -24,7 +24,6 @@ import com.remora.capture.CaptureForegroundService
 import com.remora.capture.NotificationHelper
 import com.remora.capture.ScreenshotObserver
 import com.remora.data.local.RemoraDatabase
-import com.remora.data.seed.DemoDataSeeder
 import com.remora.search.SemanticSearchEngine
 import com.remora.ui.RemoraMainScreen
 import com.remora.ui.consent.ConsentScreen
@@ -116,11 +115,6 @@ class MainActivity : ComponentActivity() {
             memoryCardDao = db.memoryCardDao()
         )
         val searchViewModel = SearchViewModel(searchEngine)
-
-        // Seed demo cards in background
-        lifecycleScope.launch(Dispatchers.IO) {
-            DemoDataSeeder.seedDemoCardsIfEmpty(this@MainActivity, db)
-        }
 
         setContent {
             RemoraTheme {
