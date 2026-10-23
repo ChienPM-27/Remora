@@ -41,6 +41,9 @@ fun RemoraMainScreen(
     var showResurfacingDetail by remember { mutableStateOf(false) }
 
     val cards by galleryViewModel.cards.collectAsState()
+    val roomResurfacedItems by galleryViewModel.resurfacedItems.collectAsState()
+    val activeResurfacedItems = if (resurfacedItems.isNotEmpty()) resurfacedItems else roomResurfacedItems
+
     val searchQuery by searchViewModel.query.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
 
@@ -67,9 +70,9 @@ fun RemoraMainScreen(
             when (currentTab) {
                 NavigationTab.GALLERY -> {
                     androidx.compose.foundation.layout.Column {
-                        if (resurfacedItems.isNotEmpty()) {
+                        if (activeResurfacedItems.isNotEmpty()) {
                             ResurfacingBanner(
-                                items = resurfacedItems,
+                                items = activeResurfacedItems,
                                 onClick = { showResurfacingDetail = true }
                             )
                         }
@@ -94,9 +97,9 @@ fun RemoraMainScreen(
         }
     }
 
-    if (showResurfacingDetail && resurfacedItems.isNotEmpty()) {
+    if (showResurfacingDetail && activeResurfacedItems.isNotEmpty()) {
         ResurfacingDetailDialog(
-            items = resurfacedItems,
+            items = activeResurfacedItems,
             onDismiss = { showResurfacingDetail = false }
         )
     }

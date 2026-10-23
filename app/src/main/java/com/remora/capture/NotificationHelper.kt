@@ -13,7 +13,9 @@ import androidx.core.app.RemoteInput
 object NotificationHelper {
 
     const val CHANNEL_ID = "remora_capture_channel"
+    const val RESURFACING_CHANNEL_ID = "remora_resurfacing_channel"
     const val NOTIFICATION_ID = 1001
+    const val RESURFACING_NOTIFICATION_ID = 1002
 
     const val ACTION_SAVE = "com.remora.action.SAVE"
     const val ACTION_SKIP = "com.remora.action.SKIP"
@@ -35,6 +37,15 @@ object NotificationHelper {
             val notificationManager: NotificationManager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
+
+            val resurfaceChannel = NotificationChannel(
+                RESURFACING_CHANNEL_ID,
+                "Remora Resurfacing Insights",
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Proactive alerts when new card links to previous study knowledge"
+            }
+            notificationManager.createNotificationChannel(resurfaceChannel)
         }
     }
 
@@ -88,6 +99,31 @@ object NotificationHelper {
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    fun showResurfacingAlert(context: Context, cardTitle: String, matchCount: Int) {
+        createNotificationChannel(context)
+
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        val openAppIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val contentPendingIntent = PendingIntent.getActivity(context, 4, openAppIntent, flags)
+
+        val notification = NotificationCompat.Builder(context, RESURFACING_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Remora: Tìm thấy tri thức liên quan!")
+            .setContentText("Bài học \"${cardTitle.take(40)}\" có $matchCount liên kết hữu ích với kiến thức bạn từng học.")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(contentPendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(RESURFACING_NOTIFICATION_ID, notification)
     }
 
     fun dismissNotification(context: Context) {

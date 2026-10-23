@@ -35,7 +35,11 @@ class MainActivity : ComponentActivity() {
         val searchEngine = SemanticSearchEngine(db.memoryCardDao(), aiClient)
 
         val consentViewModel = ConsentViewModel(db.appSettingDao())
-        val galleryViewModel = GalleryViewModel(cardRepo)
+        val galleryViewModel = GalleryViewModel(
+            repository = cardRepo,
+            resurfacingResultDao = db.resurfacingResultDao(),
+            memoryCardDao = db.memoryCardDao()
+        )
         val searchViewModel = SearchViewModel(searchEngine)
 
         // Seed demo cards in background
