@@ -1,13 +1,9 @@
 {
-    email admin@remora.app
+    email {$ACME_EMAIL:admin@remora.study}
 }
 
-http:// {
-    redir https://{host}{uri} permanent
-}
-
-https:// {
-    tls internal
+{$APP_DOMAIN:api.remora.study} {
+    encode zstd gzip
 
     reverse_proxy gateway:8080 {
         header_up Host {host}

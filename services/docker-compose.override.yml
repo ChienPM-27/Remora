@@ -1,0 +1,13 @@
+version: '3.8'
+
+# Local Development Override
+# Docker Compose tự động gộp file này khi chạy `docker compose up` trên máy trạm dev cục bộ.
+# Mục đích:
+# 1. Mở cổng 8080 của Gateway ra 127.0.0.1 (chỉ loopback máy host) để dev/test không cần domain hoặc Caddy TLS.
+# 2. Cho phép kết nối trực tiếp từ Android Studio Emulator (qua http://10.0.2.2:8080/v1)
+#    hoặc qua thiết bị Android thật (qua lệnh `adb reverse tcp:8080 tcp:8080` -> http://localhost:8080/v1).
+
+services:
+  gateway:
+    ports:
+      - "127.0.0.1:8080:8080"

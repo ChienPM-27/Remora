@@ -8,6 +8,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-api.remora.study}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@remora.study}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
