@@ -39,6 +39,7 @@ fun RemoraMainScreen(
 ) {
     var currentTab by remember { mutableStateOf(NavigationTab.GALLERY) }
     var showResurfacingDetail by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     val cards by galleryViewModel.cards.collectAsState()
     val roomResurfacedItems by galleryViewModel.resurfacedItems.collectAsState()
@@ -79,8 +80,16 @@ fun RemoraMainScreen(
                         GalleryScreen(
                             cards = cards,
                             onRetryCard = { card ->
-                                galleryViewModel.retryCard(card) {
-                                    // Trigger WorkManager retry
+                                galleryViewModel.retryCard(card) { cardId ->
+                                    val request = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
+                                        .setInputData(androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to cardId))
+                                        .setConstraints(
+                                            androidx.work.Constraints.Builder()
+                                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                                .build()
+                                        )
+                                        .build()
+                                    androidx.work.WorkManager.getInstance(context).enqueue(request)
                                 }
                             }
                         )

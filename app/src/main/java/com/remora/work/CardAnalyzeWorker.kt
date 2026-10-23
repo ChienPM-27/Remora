@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.remora.ai.AiGatewayClient
+import com.remora.ai.ApiException
 import com.remora.core.model.contract.VectorMath
 import com.remora.core.model.entity.CardTags
 import com.remora.core.model.entity.ContentType
@@ -28,23 +29,30 @@ class CardAnalyzeWorker(
         val cardEntity = db.memoryCardDao().getCardById(cardId) ?: return Result.failure()
         val card = cardEntity.toDomainModel()
 
-        Timber.i("Starting analysis for MemoryCard #$cardId (attempt: ${card.attemptCount + 1})")
+        Timber.i("Starting analysis for MemoryCard #$cardId (current attempts: ${card.attemptCount})")
 
         try {
-            // 1. Read & compress image
+            // 1. Read & compress image (No mock bytes permitted: if unreadable -> mark FAILED)
             val uri = Uri.parse(card.imageUri)
             val compressedBytes = ImageCompressor.compressImageUri(applicationContext, uri)
-                ?: run {
-                    // Fallback to placeholder bytes for assets/mock testing
-                    "RemoraMockImageBytes".toByteArray()
-                }
+            if (compressedBytes == null) {
+                Timber.e("Failed to read or compress image for card #$cardId: ${card.imageUri}")
+                val failedCard = card.copy(
+                    status = ProcessingStatus.FAILED,
+                    attemptCount = card.attemptCount + 1,
+                    errorCode = "UNREADABLE_IMAGE: File cannot be read or compressed from device"
+                )
+                db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(failedCard))
+                return Result.failure()
+            }
 
             // 2. Extract card metadata via AI Gateway
             val client = AiGatewayClient()
             val extractResult = client.extractCard(compressedBytes, card.userIntent)
 
             if (extractResult.isFailure) {
-                return handleFailure(db, card, extractResult.exceptionOrNull()?.message ?: "Extraction failed")
+                val error = extractResult.exceptionOrNull()
+                return handleFailure(db, card, error)
             }
 
             val extracted = extractResult.getOrThrow()
@@ -60,12 +68,14 @@ class CardAnalyzeWorker(
 
             // 4. Generate 768d embedding
             val embeddingResult = client.generateEmbedding(combinedText)
-            val embedding = if (embeddingResult.isSuccess) {
-                val floats = embeddingResult.getOrThrow().toFloatArray()
-                VectorMath.l2Normalize(floats)
-            } else {
-                null
+            if (embeddingResult.isFailure) {
+                val error = embeddingResult.exceptionOrNull()
+                Timber.w("Embedding generation failed for card #$cardId, triggering retry policy")
+                return handleFailure(db, card, error)
             }
+
+            val rawEmbedding = embeddingResult.getOrThrow().toFloatArray()
+            val normalizedEmbedding = VectorMath.l2Normalize(rawEmbedding)
 
             // 5. Update Room database to DONE
             val updatedCard = card.copy(
@@ -74,13 +84,13 @@ class CardAnalyzeWorker(
                 tags = CardTags(subject = extracted.tags.subject, topics = extracted.tags.topics),
                 contentType = try { ContentType.valueOf(extracted.content_type) } catch (_: Exception) { ContentType.UNKNOWN },
                 ocrText = extracted.ocr_text,
-                embedding = embedding,
+                embedding = normalizedEmbedding,
                 status = ProcessingStatus.DONE,
                 errorCode = null
             )
 
             db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
-            Timber.i("Successfully analyzed and saved MemoryCard #$cardId")
+            Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
 
             // 6. Trigger Resurfacing pipeline and save results to Room
             val app = applicationContext as? com.remora.RemoraApp
@@ -103,18 +113,34 @@ class CardAnalyzeWorker(
             return Result.success()
 
         } catch (e: Exception) {
-            Timber.e(e, "Exception analyzing MemoryCard #$cardId")
-            return handleFailure(db, card, e.message ?: "Unknown error")
+            Timber.e(e, "Unexpected exception analyzing MemoryCard #$cardId")
+            return handleFailure(db, card, e)
         }
     }
 
     private suspend fun handleFailure(
         db: RemoraDatabase,
         card: MemoryCard,
-        errorMsg: String
+        error: Throwable?
     ): Result {
+        val errorMsg = error?.message ?: "Unknown error"
         val newAttemptCount = card.attemptCount + 1
-        return if (newAttemptCount >= 3) {
+
+        // Distinguish non-retryable client errors (400, 401, 403, 404)
+        if (error is ApiException && error.isNonRetryableClientError) {
+            Timber.e("Non-retryable client error (HTTP ${error.statusCode}) for card #${card.id}. Marking FAILED.")
+            val failedCard = card.copy(
+                status = ProcessingStatus.FAILED,
+                attemptCount = newAttemptCount,
+                errorCode = "CLIENT_ERROR_${error.statusCode}: $errorMsg"
+            )
+            db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(failedCard))
+            return Result.failure()
+        }
+
+        // Retryable errors (429, 5xx, or network timeouts)
+        return if (newAttemptCount >= MAX_RETRIES) {
+            Timber.e("Max retries ($MAX_RETRIES) exceeded for card #${card.id}. Marking FAILED.")
             val failedCard = card.copy(
                 status = ProcessingStatus.FAILED,
                 attemptCount = newAttemptCount,
@@ -123,7 +149,9 @@ class CardAnalyzeWorker(
             db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(failedCard))
             Result.failure()
         } else {
+            Timber.w("Retryable error for card #${card.id} (attempt $newAttemptCount/$MAX_RETRIES). Requeueing with backoff.")
             val pendingCard = card.copy(
+                status = ProcessingStatus.PENDING,
                 attemptCount = newAttemptCount,
                 errorCode = errorMsg
             )
@@ -134,5 +162,6 @@ class CardAnalyzeWorker(
 
     companion object {
         const val KEY_CARD_ID = "key_card_id"
+        const val MAX_RETRIES = 3
     }
 }

@@ -20,6 +20,19 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
+class ApiException(
+    val statusCode: Int,
+    message: String,
+    val retryAfterSeconds: Long? = null
+) : Exception(message) {
+    val isNonRetryableClientError: Boolean
+        get() = statusCode in 400..404 || statusCode == 422
+    val isRateLimited: Boolean
+        get() = statusCode == 429
+    val isServerError: Boolean
+        get() = statusCode >= 500
+}
+
 class AiGatewayClient(
     private val baseUrl: String = BuildConfig.PROXY_BASE_URL
 ) {
@@ -91,7 +104,9 @@ class AiGatewayClient(
                     val body = response.body?.string() ?: ""
                     Result.success(json.decodeFromString<ExtractCardResponseDto>(body))
                 } else {
-                    Result.failure(Exception("Extract card failed with HTTP ${response.code}"))
+                    val retryAfter = response.header("Retry-After")?.toLongOrNull()
+                    val errBody = response.body?.string() ?: ""
+                    Result.failure(ApiException(response.code, "Extract card failed HTTP ${response.code}: $errBody", retryAfter))
                 }
             }
         } catch (e: Exception) {
@@ -122,7 +137,9 @@ class AiGatewayClient(
                     val result = json.decodeFromString<EmbeddingResponseDto>(body)
                     Result.success(result.embedding)
                 } else {
-                    Result.failure(Exception("Embedding generation failed with HTTP ${response.code}"))
+                    val retryAfter = response.header("Retry-After")?.toLongOrNull()
+                    val errBody = response.body?.string() ?: ""
+                    Result.failure(ApiException(response.code, "Embedding failed HTTP ${response.code}: $errBody", retryAfter))
                 }
             }
         } catch (e: Exception) {
