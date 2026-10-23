@@ -163,6 +163,20 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 * **Quản trị Dependency & Kiến trúc:**
   - Giữ vững Manual DI Container (`AppContainer.kt`) theo working agreement, không dùng Hilt trong MVP.
   - Tích hợp Room KSP, Jetpack Compose Material 3, WorkManager, OkHttp/Retrofit Serialization.
+
+---
+
+## 7. Quyết định về PostgreSQL & Quản lý Tài nguyên Backend (2026-10-23)
+
+* **Loại bỏ PostgreSQL khỏi Docker Compose MVP:**
+  - Không triển khai container PostgreSQL trong MVP 24h: Tài khoản demo và 3 bộ đếm hạn ngạch quota (`extract_card: 50`, `resurface_batch: 50`, `embeddings: 300`) được quản trị in-memory bởi `gateway` qua `UserQuotaManager`.
+  - Cơ chế reset: Tự động reset về 0 lúc 00:00 (giờ VN) hàng ngày dựa trên ngày hệ thống (`LocalDate`), kèm endpoint nội bộ `POST /v1/admin/reset-quota` cho phép reset tức thì khi demo.
+  - Lợi ích: Tiết kiệm ~250MB RAM, loại bỏ điểm nghẽn khởi động phụ thuộc DB, đảm bảo backend khởi động tức thì < 5 giây trên EC2 `t3.small`. PostgreSQL sẽ được kích hoạt lại ở Post-MVP khi triển khai `core-service` đồng bộ đám mây.
+* **Cấu hình Giới hạn Tài nguyên (mem_limit & JAVA_OPTS):**
+  - `gateway`: `mem_limit = 384m`, `JAVA_OPTS = "-Xms128m -Xmx320m -XX:+UseG1GC"`
+  - `ai-service`: `mem_limit = 512m`, `JAVA_OPTS = "-Xms128m -Xmx384m -XX:+UseG1GC"`
+  - `caddy`: `mem_limit = 64m`
+  - Tổng RAM trần của toàn bộ cụm: ~960MB, an toàn tuyệt đối trên EC2 `t3.small` (2GB RAM).
 * **Xác nhận Kiểm thử Thực tế trên Emulator & Thiết bị:**
   - Đã khởi chạy và kiểm thử trực tiếp trên giả lập Android `Medium_Phone_API_37.0` (Android API 37.0).
   - Đã xuất bản và lưu trữ ảnh chụp bằng chứng kiểm thử giao diện tại `docs/evidence/`:

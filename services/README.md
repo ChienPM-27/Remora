@@ -4,7 +4,8 @@ Cụm microservices phục vụ ứng dụng Remora bao gồm:
 - **`gateway`**: Cổng API công khai, xác thực JWT, bảo vệ rate limit theo IP, quản lý 3 bộ đếm quota theo ngày (`extract_card`, `resurface_batch`, `embeddings`), gắn `X-Request-Id` và chuyển tiếp yêu cầu sang `ai-service`.
 - **`ai-service`**: Dịch vụ xử lý trí tuệ nhân tạo, tương tác trực tiếp với Google Gemini API (`gemini-3.5-flash-lite`, `gemini-embedding-2`).
 - **`caddy`**: Reverse proxy tự động cấp và gia hạn chứng chỉ SSL/TLS miễn phí qua Let's Encrypt cho tên miền chính thức.
-- **`postgres`**: Cơ sở dữ liệu PostgreSQL lưu trữ tài khoản demo và hạn ngạch quota.
+
+*Lưu ý:* Trong MVP 24h, PostgreSQL được loại bỏ; hạn ngạch và tài khoản demo được quản trị in-memory và tự động làm mới hàng ngày.
 
 ---
 

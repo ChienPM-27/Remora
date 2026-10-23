@@ -21,9 +21,6 @@ dependencies {
     implementation("io.ktor:ktor-client-cio:$ktorVersion")
     implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
 
-    // Database & Password Hashing
-    implementation("org.postgresql:postgresql:42.7.3")
-    implementation("com.zaxxer:HikariCP:5.1.0")
     implementation("ch.qos.logback:logback-classic:1.5.6")
 
     testImplementation(kotlin("test"))
