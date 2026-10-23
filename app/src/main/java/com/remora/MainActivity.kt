@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
 
         // Seed demo cards in background
         lifecycleScope.launch(Dispatchers.IO) {
-            DemoDataSeeder.seedDemoCardsIfEmpty(db)
+            DemoDataSeeder.seedDemoCardsIfEmpty(this@MainActivity, db)
         }
 
         setContent {
