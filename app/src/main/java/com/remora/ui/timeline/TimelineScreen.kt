@@ -316,35 +316,42 @@ private fun TimelineCardRow(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    // User Intent Badge (Blue from 01-timeline.png)
+                    val userIntent = card.userIntent
+                    if (!userIntent.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Surface(
+                            shape = RoundedCornerShape(percent = 50),
+                            color = RemoraBlueSoft
+                        ) {
+                            Text(
+                                text = userIntent.lowercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = RemoraBlue,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
 
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Badges and tags row
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        // User Intent Badge (Blue from 01-timeline.png)
-                        val userIntent = card.userIntent
-                        if (!userIntent.isNullOrBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(percent = 50),
-                                color = RemoraBlueSoft
-                            ) {
-                                Text(
-                                    text = userIntent.lowercase(),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = RemoraBlue,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-
                         // Subject hashtag
                         if (card.tags.subject.isNotBlank()) {
                             Text(
                                 text = "#${card.tags.subject.lowercase()}",
                                 fontSize = 11.sp,
-                                color = RemoraSubtleText
+                                color = RemoraSubtleText,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
