@@ -1,0 +1,18 @@
+{
+    email admin@remora.app
+}
+
+http:// {
+    redir https://{host}{uri} permanent
+}
+
+https:// {
+    tls internal
+
+    reverse_proxy gateway:8080 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto https
+    }
+}

@@ -1,6 +1,22 @@
 version: '3.8'
 
 services:
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: remora-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - gateway
+    networks:
+      - remora-net
+
   postgres:
     image: postgres:16-alpine
     container_name: remora-postgres
@@ -8,7 +24,7 @@ services:
     environment:
       POSTGRES_DB: remora_db
       POSTGRES_USER: remora_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-remora_pass_secure}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./gateway/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -26,20 +42,21 @@ services:
       dockerfile: gateway/Dockerfile
     container_name: remora-gateway
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     environment:
       PORT: 8080
-      JWT_SECRET: ${JWT_SECRET:-remora_super_secret_jwt_key_hackathon_2026}
+      JWT_SECRET: ${JWT_SECRET}
+      DEMO_USERNAME: ${DEMO_USERNAME}
+      DEMO_PASSWORD: ${DEMO_PASSWORD}
       DATABASE_URL: jdbc:postgresql://postgres:5432/remora_db
       DB_USER: remora_user
-      DB_PASSWORD: ${DB_PASSWORD:-remora_pass_secure}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
       AI_SERVICE_URL: http://ai-service:8082
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-remora_internal_mesh_key_2026}
-      RATE_LIMIT_PER_MINUTE: 60
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
     depends_on:
       postgres:
         condition: service_healthy
+      ai-service:
+        condition: service_started
     networks:
       - remora-net
 
@@ -55,12 +72,14 @@ services:
       GEMINI_VISION_MODEL: gemini-3.5-flash-lite
       GEMINI_VISION_FALLBACK_MODEL: gemini-3.5-flash
       GEMINI_EMBEDDING_MODEL: gemini-embedding-2
-      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY:-remora_internal_mesh_key_2026}
+      INTERNAL_SERVICE_KEY: ${INTERNAL_SERVICE_KEY}
     networks:
       - remora-net
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 networks:
   remora-net:

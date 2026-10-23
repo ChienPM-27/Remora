@@ -18,7 +18,7 @@ import com.remora.data.local.entity.ResurfacingResultEntity
         AppSettingEntity::class
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class RemoraDatabase : RoomDatabase() {
 
@@ -36,7 +36,7 @@ abstract class RemoraDatabase : RoomDatabase() {
                     context.applicationContext,
                     RemoraDatabase::class.java,
                     "remora.db"
-                ).fallbackToDestructiveMigration().build()
+                ).build()
                 INSTANCE = instance
                 instance
             }
