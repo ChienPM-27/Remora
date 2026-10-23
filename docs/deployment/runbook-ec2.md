@@ -188,11 +188,24 @@ curl -X POST https://<DOMAIN>/v1/auth/login-demo \
 * **Tài khoản Chấm thi (`demo_student_01`):** Cấp quota 50 thẻ, dành riêng cho ban giám khảo cầm máy bấm thử nghiệm trực tiếp.
 
 ### 5.2 Lệnh Khẩn cấp Reset Quota trong lúc Demo
-Nếu trong quá trình tập dượt thuyết trình tài khoản demo bị chạm trần quota:
+Hệ thống Remora quản lý 3 bộ đếm quota độc lập (`extract_card`: 50/ngày, `resurface_batch`: 50/ngày, `embeddings`: 300/ngày) và tự động làm mới lúc 00:00 (giờ VN) hàng ngày.
+Nếu trong quá trình tập dượt thuyết trình tài khoản demo bị chạm trần quota, có 2 cách reset khẩn cấp:
+
+**Cách 1: Gọi API Admin Reset Quota (Nhanh nhất & không cần SSH vào DB):**
 ```bash
-# Chạy trực tiếp trên server EC2 để reset hạn mức về 0
+# Reset quota cho tài khoản demo cụ thể
+curl -X POST https://<DOMAIN>/v1/admin/reset-quota?userId=usr_demo_student_01 \
+  -H "X-Internal-Service-Key: <GIÁ_TRỊ_INTERNAL_SERVICE_KEY>"
+
+# Hoặc reset quota cho toàn bộ người dùng
+curl -X POST https://<DOMAIN>/v1/admin/reset-quota \
+  -H "X-Internal-Service-Key: <GIÁ_TRỊ_INTERNAL_SERVICE_KEY>"
+```
+
+**Cách 2: Reset trực tiếp qua PostgreSQL (nếu container Postgres đang chạy):**
+```bash
 docker exec -i remora-postgres psql -U remora_admin -d remora_db -c \
-  "UPDATE user_quotas SET used_today = 0, resurface_used_today = 0 WHERE user_id = 'usr_demo_student_01';"
+  "UPDATE remora_auth.user_quotas SET used_today = 0, resurface_used_today = 0, embedding_used_today = 0 WHERE user_id = 'usr_demo_student_01';"
 ```
 
 ### 5.3 Rủi ro Giới hạn Đăng nhập theo IP khi Dùng Chung 4G Hotspot

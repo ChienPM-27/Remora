@@ -36,7 +36,7 @@ Tài liệu này cung cấp bảng tra cứu toàn diện và thông tin chi ti�
 * **Các trách nhiệm chính:**
   1. **Minimal Auth Module:** Cung cấp endpoint `/v1/auth/login-demo` để cấp phát Self-issued JWT cho tài khoản sinh viên thử nghiệm.
   2. **JWT Authentication Filter:** Kiểm tra tính hợp lệ của access token trong header `Authorization: Bearer <token>` trên mọi route được bảo vệ.
-  3. **Rate Limiting & AI Quota Guard:** Giới hạn số request/phút (ví dụ: 60 req/min) và số lượng phân tích AI tối đa trong 24h của mỗi sinh viên (tránh cạn kiệt ngân sách Gemini).
+  3. **Rate Limiting & AI Quota Guard:** Giới hạn số request/phút (5 req/phút khi login) và quản lý 3 hạn mức quota độc lập theo ngày (`extract_card`: 50/ngày, `resurface_batch`: 50/ngày, `embeddings`: 300/ngày cho tìm kiếm ngữ nghĩa và lưu thẻ). Các hạn mức này tự động reset vào 00:00 (giờ VN) mỗi ngày hoặc reset qua admin endpoint `POST /v1/admin/reset-quota`.
   4. **Request Tracing:** Tự động tạo và gắn header `X-Request-Id` nếu client chưa có, truyền xuyên suốt qua `ai-service` và ghi vào log có cấu trúc.
   5. **Reverse Proxy & Routing:** Chuyển tiếp `/v1/ai/*` sang `ai-service:8082`.
 * **Cổng mạng:** `8080` (HTTP nội bộ sau TLS Terminator, hoặc nhận trực tiếp nếu chạy debug cục bộ).
@@ -75,7 +75,7 @@ Tài liệu này cung cấp bảng tra cứu toàn diện và thông tin chi ti�
 * **Cơ chế khởi tạo:** File SQL kịch bản khởi tạo `init.sql` được mount vào `/docker-entrypoint-initdb.d/` trong Docker Compose. **Không sử dụng Flyway trong MVP 24h** để tối ưu thời gian dựng hệ thống.
 * **Các bảng dữ liệu sở hữu:**
   * `users`: `id`, `username`, `display_name`, `created_at`, `status`.
-  * `user_quotas`: `user_id`, `daily_ai_limit`, `used_today`, `last_reset_date`.
+  * `user_quotas`: `user_id`, `daily_card_limit`, `used_today`, `resurface_batch_limit`, `resurface_used_today`, `embedding_limit`, `embedding_used_today`, `last_reset_date`.
   * `audit_logs`: `id`, `request_id`, `user_id`, `route`, `status_code`, `latency_ms`, `created_at`.
 * **Cổng mạng:** `5432` (Internal Only).
 

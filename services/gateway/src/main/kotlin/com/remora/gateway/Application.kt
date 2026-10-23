@@ -44,6 +44,8 @@ import io.ktor.server.routing.routing
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -70,12 +72,29 @@ data class ErrorResponse(
 )
 
 @Serializable
-data class QuotaResponse(
-    val user_id: String,
+data class QuotaDetail(
     val daily_limit: Int,
     val used_today: Int,
     val remaining: Int
 )
+
+@Serializable
+data class QuotaResponse(
+    val user_id: String,
+    val reset_date: String,
+    val extract_card: QuotaDetail,
+    val resurface_batch: QuotaDetail,
+    val embeddings: QuotaDetail,
+    val daily_limit: Int = 50,
+    val used_today: Int = 0,
+    val remaining: Int = 50
+)
+
+enum class QuotaType(val defaultLimit: Int, val description: String) {
+    EXTRACT_CARD(50, "Trích xuất thẻ học từ ảnh"),
+    RESURFACE_BATCH(50, "Đánh giá resurfacing theo lô"),
+    EMBEDDINGS(300, "Tạo vector embeddings (tìm kiếm ngữ nghĩa và lưu thẻ)")
+}
 
 class IpRateLimiter(
     private val maxAttempts: Int = 5,
@@ -98,28 +117,48 @@ class IpRateLimiter(
 }
 
 class UserQuotaManager(
-    private val defaultDailyLimit: Int = 50
+    private val limits: Map<QuotaType, Int> = QuotaType.entries.associateWith { it.defaultLimit },
+    private val clock: () -> LocalDate = { LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")) }
 ) {
-    private val userUsage = ConcurrentHashMap<String, AtomicInteger>()
+    private val usageMap = ConcurrentHashMap<String, AtomicInteger>()
 
-    fun getRemaining(userId: String): Int {
-        val used = userUsage.computeIfAbsent(userId) { AtomicInteger(0) }.get()
-        return (defaultDailyLimit - used).coerceAtLeast(0)
+    private fun buildKey(userId: String, type: QuotaType, date: LocalDate): String =
+        "$userId:${type.name}:$date"
+
+    fun getLimit(type: QuotaType): Int = limits[type] ?: type.defaultLimit
+
+    fun getUsed(userId: String, type: QuotaType): Int {
+        val key = buildKey(userId, type, clock())
+        return usageMap[key]?.get() ?: 0
     }
 
-    fun getUsed(userId: String): Int {
-        return userUsage.computeIfAbsent(userId) { AtomicInteger(0) }.get()
+    fun getRemaining(userId: String, type: QuotaType): Int {
+        val used = getUsed(userId, type)
+        return (getLimit(type) - used).coerceAtLeast(0)
     }
 
-    fun tryConsume(userId: String): Boolean {
-        val counter = userUsage.computeIfAbsent(userId) { AtomicInteger(0) }
+    fun tryConsume(userId: String, type: QuotaType): Boolean {
+        val key = buildKey(userId, type, clock())
+        val counter = usageMap.computeIfAbsent(key) { AtomicInteger(0) }
+        val limit = getLimit(type)
         while (true) {
             val current = counter.get()
-            if (current >= defaultDailyLimit) {
+            if (current >= limit) {
                 return false
             }
             if (counter.compareAndSet(current, current + 1)) {
                 return true
+            }
+        }
+    }
+
+    fun resetQuota(userId: String? = null) {
+        if (userId == null) {
+            usageMap.clear()
+        } else {
+            val today = clock()
+            QuotaType.entries.forEach { type ->
+                usageMap.remove(buildKey(userId, type, today))
             }
         }
     }
@@ -138,7 +177,7 @@ fun Application.module() {
 
     val jwtAlgorithm = Algorithm.HMAC256(jwtSecret)
     val loginRateLimiter = IpRateLimiter(maxAttempts = 5, windowMs = 60_000L)
-    val quotaManager = UserQuotaManager(defaultDailyLimit = 50)
+    val quotaManager = UserQuotaManager()
 
     val httpClient = HttpClient(CIO) {
         install(ClientContentNegotiation) {
@@ -229,14 +268,37 @@ fun Application.module() {
                 get("/quota") {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
-                    val used = quotaManager.getUsed(userId)
-                    val remaining = quotaManager.getRemaining(userId)
+                    val extractUsed = quotaManager.getUsed(userId, QuotaType.EXTRACT_CARD)
+                    val extractRemaining = quotaManager.getRemaining(userId, QuotaType.EXTRACT_CARD)
+                    val resurfaceUsed = quotaManager.getUsed(userId, QuotaType.RESURFACE_BATCH)
+                    val resurfaceRemaining = quotaManager.getRemaining(userId, QuotaType.RESURFACE_BATCH)
+                    val embeddingUsed = quotaManager.getUsed(userId, QuotaType.EMBEDDINGS)
+                    val embeddingRemaining = quotaManager.getRemaining(userId, QuotaType.EMBEDDINGS)
+
+                    val todayStr = LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")).toString()
+
                     call.respond(
                         QuotaResponse(
                             user_id = userId,
-                            daily_limit = 50,
-                            used_today = used,
-                            remaining = remaining
+                            reset_date = todayStr,
+                            extract_card = QuotaDetail(
+                                daily_limit = quotaManager.getLimit(QuotaType.EXTRACT_CARD),
+                                used_today = extractUsed,
+                                remaining = extractRemaining
+                            ),
+                            resurface_batch = QuotaDetail(
+                                daily_limit = quotaManager.getLimit(QuotaType.RESURFACE_BATCH),
+                                used_today = resurfaceUsed,
+                                remaining = resurfaceRemaining
+                            ),
+                            embeddings = QuotaDetail(
+                                daily_limit = quotaManager.getLimit(QuotaType.EMBEDDINGS),
+                                used_today = embeddingUsed,
+                                remaining = embeddingRemaining
+                            ),
+                            daily_limit = quotaManager.getLimit(QuotaType.EXTRACT_CARD),
+                            used_today = extractUsed,
+                            remaining = extractRemaining
                         )
                     )
                 }
@@ -245,10 +307,11 @@ fun Application.module() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
 
-                    if (!quotaManager.tryConsume(userId)) {
+                    if (!quotaManager.tryConsume(userId, QuotaType.EXTRACT_CARD)) {
+                        val limit = quotaManager.getLimit(QuotaType.EXTRACT_CARD)
                         call.respond(
                             HttpStatusCode.TooManyRequests,
-                            ErrorResponse("QUOTA_EXCEEDED", "Bạn đã dùng hết hạn ngạch 50 lượt gọi AI trong ngày.")
+                            ErrorResponse("QUOTA_EXCEEDED", "Bạn đã dùng hết hạn ngạch trích xuất thẻ ($limit lượt/ngày). Hạn ngạch tự động làm mới vào ngày mai.")
                         )
                         return@post
                     }
@@ -285,10 +348,11 @@ fun Application.module() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
 
-                    if (!quotaManager.tryConsume(userId)) {
+                    if (!quotaManager.tryConsume(userId, QuotaType.EMBEDDINGS)) {
+                        val limit = quotaManager.getLimit(QuotaType.EMBEDDINGS)
                         call.respond(
                             HttpStatusCode.TooManyRequests,
-                            ErrorResponse("QUOTA_EXCEEDED", "Bạn đã dùng hết hạn ngạch 50 lượt gọi AI trong ngày.")
+                            ErrorResponse("QUOTA_EXCEEDED", "Bạn đã dùng hết hạn ngạch embedding và tìm kiếm ($limit lượt/ngày). Hạn ngạch tự động làm mới vào ngày mai.")
                         )
                         return@post
                     }
@@ -322,10 +386,11 @@ fun Application.module() {
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
 
-                    if (!quotaManager.tryConsume(userId)) {
+                    if (!quotaManager.tryConsume(userId, QuotaType.RESURFACE_BATCH)) {
+                        val limit = quotaManager.getLimit(QuotaType.RESURFACE_BATCH)
                         call.respond(
                             HttpStatusCode.TooManyRequests,
-                            ErrorResponse("QUOTA_EXCEEDED", "Bạn đã dùng hết hạn ngạch 50 lượt gọi AI trong ngày.")
+                            ErrorResponse("QUOTA_EXCEEDED", "Bạn đã dùng hết hạn ngạch phân tích liên kết ($limit lượt/ngày). Hạn ngạch tự động làm mới vào ngày mai.")
                         )
                         return@post
                     }
@@ -354,6 +419,20 @@ fun Application.module() {
                         call.respond(HttpStatusCode.BadGateway, ErrorResponse("BAD_GATEWAY", "ai-service is unreachable: ${e.message}"))
                     }
                 }
+            }
+        }
+
+        route("/v1/admin") {
+            post("/reset-quota") {
+                val key = call.request.header("X-Internal-Service-Key") ?: ""
+                if (internalServiceKey.isBlank() || key != internalServiceKey) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorResponse("UNAUTHORIZED", "Invalid or missing internal service key"))
+                    return@post
+                }
+                val targetUser = call.request.queryParameters["userId"]
+                quotaManager.resetQuota(targetUser)
+                logger.info("Admin reset quota executed for user: ${targetUser ?: "ALL"}")
+                call.respond(mapOf("status" to "ok", "message" to "Quota reset successfully for ${targetUser ?: "all users"}"))
             }
         }
     }

@@ -17,8 +17,10 @@ CREATE TABLE IF NOT EXISTS remora_auth.user_quotas (
     user_id VARCHAR(64) PRIMARY KEY REFERENCES remora_auth.users(id) ON DELETE CASCADE,
     daily_card_limit INTEGER NOT NULL DEFAULT 50,
     used_today INTEGER NOT NULL DEFAULT 0,
-    resurface_batch_limit INTEGER NOT NULL DEFAULT 100,
+    resurface_batch_limit INTEGER NOT NULL DEFAULT 50,
     resurface_used_today INTEGER NOT NULL DEFAULT 0,
+    embedding_limit INTEGER NOT NULL DEFAULT 300,
+    embedding_used_today INTEGER NOT NULL DEFAULT 0,
     last_reset_date DATE NOT NULL DEFAULT CURRENT_DATE
 );
 
@@ -47,11 +49,13 @@ VALUES (
     'ACTIVE'
 ) ON CONFLICT (username) DO NOTHING;
 
-INSERT INTO remora_auth.user_quotas (user_id, daily_card_limit, used_today, resurface_batch_limit, resurface_used_today)
+INSERT INTO remora_auth.user_quotas (user_id, daily_card_limit, used_today, resurface_batch_limit, resurface_used_today, embedding_limit, embedding_used_today)
 VALUES (
     'usr_demo_student_01',
     50,
     0,
-    100,
+    50,
+    0,
+    300,
     0
 ) ON CONFLICT (user_id) DO NOTHING;
