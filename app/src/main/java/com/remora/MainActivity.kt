@@ -1,14 +1,20 @@
 package com.remora
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.remora.ai.AiGatewayClient
 import com.remora.capture.CaptureForegroundService
@@ -22,8 +28,47 @@ import com.remora.ui.gallery.GalleryViewModel
 import com.remora.ui.search.SearchViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
+
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val allGranted = permissions.entries.all { it.value }
+        if (allGranted) {
+            Timber.i("All requested permissions granted by user, starting CaptureForegroundService")
+            CaptureForegroundService.start(this)
+        } else {
+            Timber.w("Some permissions were denied: $permissions")
+        }
+    }
+
+    private fun getRequiredPermissions(): Array<String> {
+        val list = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            list.add(Manifest.permission.READ_MEDIA_IMAGES)
+            list.add(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            list.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        return list.toTypedArray()
+    }
+
+    private fun startCaptureServiceIfPermitted() {
+        val permissions = getRequiredPermissions()
+        val allGranted = permissions.all { perm ->
+            ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
+        }
+
+        if (allGranted) {
+            Timber.i("Permissions already granted, starting CaptureForegroundService")
+            CaptureForegroundService.start(this)
+        } else {
+            Timber.i("Requesting runtime permissions: ${permissions.joinToString()}")
+            permissionLauncher.launch(permissions)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,18 +97,22 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val hasConsented by consentViewModel.hasConsented.collectAsState()
 
+                    // Side-effect: Only start service outside composition when consented
+                    LaunchedEffect(hasConsented) {
+                        if (hasConsented) {
+                            startCaptureServiceIfPermitted()
+                        }
+                    }
+
                     if (!hasConsented) {
                         ConsentScreen(
                             onConsentGranted = {
                                 consentViewModel.grantConsent {
-                                    CaptureForegroundService.start(this@MainActivity)
+                                    startCaptureServiceIfPermitted()
                                 }
                             }
                         )
                     } else {
-                        // Start screenshot observer background service
-                        CaptureForegroundService.start(this@MainActivity)
-
                         RemoraMainScreen(
                             galleryViewModel = galleryViewModel,
                             searchViewModel = searchViewModel
