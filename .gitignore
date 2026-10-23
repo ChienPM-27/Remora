@@ -15,4 +15,6 @@ remora_docs_extracted.txt
 .env
 .env.*
 !.env.example
+bin/
+
 

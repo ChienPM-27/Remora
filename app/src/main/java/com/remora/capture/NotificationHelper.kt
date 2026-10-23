@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.RemoteInput
+import com.remora.MainActivity
 
 object NotificationHelper {
 
@@ -24,6 +25,7 @@ object NotificationHelper {
 
     const val EXTRA_IMAGE_URI = "extra_image_uri"
     const val EXTRA_USER_INTENT = "extra_user_intent"
+    const val EXTRA_OPEN_SAVE_SHEET = "extra_open_save_sheet"
 
     fun createNotificationChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -41,7 +43,7 @@ object NotificationHelper {
             val resurfaceChannel = NotificationChannel(
                 RESURFACING_CHANNEL_ID,
                 "Remora Resurfacing Insights",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
                 description = "Proactive alerts when new card links to previous study knowledge"
             }
@@ -52,11 +54,20 @@ object NotificationHelper {
     fun showCapturePrompt(context: Context, imageUri: Uri) {
         createNotificationChannel(context)
 
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val piFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         } else {
             PendingIntent.FLAG_UPDATE_CURRENT
         }
+
+        // Tap on notification body -> Open Remora with Save layout directly
+        val openSaveIntent = Intent(context, MainActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            putExtra(EXTRA_IMAGE_URI, imageUri.toString())
+            putExtra(EXTRA_OPEN_SAVE_SHEET, true)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val contentPendingIntent = PendingIntent.getActivity(context, 100, openSaveIntent, piFlags)
 
         // Inline RemoteInput for user_intent
         val remoteInput = RemoteInput.Builder(EXTRA_USER_INTENT)
@@ -67,7 +78,7 @@ object NotificationHelper {
             action = ACTION_SAVE
             putExtra(EXTRA_IMAGE_URI, imageUri.toString())
         }
-        val savePendingIntent = PendingIntent.getBroadcast(context, 1, saveIntent, flags)
+        val savePendingIntent = PendingIntent.getBroadcast(context, 1, saveIntent, piFlags)
 
         val saveAction = NotificationCompat.Action.Builder(
             android.R.drawable.ic_menu_save,
@@ -79,17 +90,19 @@ object NotificationHelper {
             action = ACTION_SKIP
             putExtra(EXTRA_IMAGE_URI, imageUri.toString())
         }
-        val skipPendingIntent = PendingIntent.getBroadcast(context, 2, skipIntent, flags)
+        val skipPendingIntent = PendingIntent.getBroadcast(context, 2, skipIntent, piFlags)
 
         val pauseIntent = Intent(context, CaptureActionReceiver::class.java).apply {
             action = ACTION_PAUSE
         }
-        val pausePendingIntent = PendingIntent.getBroadcast(context, 3, pauseIntent, flags)
+        val pausePendingIntent = PendingIntent.getBroadcast(context, 3, pauseIntent, piFlags)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("Phát hiện ảnh chụp bài giảng")
-            .setContentText("Bạn có muốn lưu vào Bộ não thứ hai Remora?")
+            .setContentText("Chạm để mở bảng lưu Remora hoặc nhập ghi chú")
+            .setContentIntent(contentPendingIntent)
+            .setFullScreenIntent(contentPendingIntent, false)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .addAction(saveAction)
@@ -117,7 +130,7 @@ object NotificationHelper {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Remora: Tìm thấy tri thức liên quan!")
             .setContentText("Bài học \"${cardTitle.take(40)}\" có $matchCount liên kết hữu ích với kiến thức bạn từng học.")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(contentPendingIntent)
             .setAutoCancel(true)
             .build()

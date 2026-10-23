@@ -13,6 +13,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlin.math.abs
 
 class ScreenshotObserver(
     private val context: Context,
@@ -60,7 +61,7 @@ class ScreenshotObserver(
 
                 val projection = projectionList.toTypedArray()
                 val queryUri = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
-                val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC"
+                val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC, ${MediaStore.Images.Media._ID} DESC"
 
                 context.contentResolver.query(queryUri, projection, null, null, sortOrder)?.use { cursor ->
                     if (cursor.moveToFirst()) {
@@ -84,11 +85,11 @@ class ScreenshotObserver(
                             }
                         }
 
-                        // 4. Limit to photos taken/added within the last 30 seconds
+                        // 4. Time sanity check: allow up to 10 minutes tolerance to avoid clock skew on emulators
                         val dateAddedSeconds = cursor.getLong(dateAddedCol)
                         val nowSeconds = System.currentTimeMillis() / 1000L
-                        if (nowSeconds - dateAddedSeconds > 30L) {
-                            // Historical photo, ignore
+                        val isRecent = abs(nowSeconds - dateAddedSeconds) < 600L || (lastHandledMediaId != -1L && id > lastHandledMediaId)
+                        if (!isRecent) {
                             return@use
                         }
 
@@ -106,6 +107,11 @@ class ScreenshotObserver(
                             lastHandledTimestamp = now
                             val imageUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
                             Timber.i("Fresh screenshot detected: id=$id, uri=$imageUri, name=$displayName")
+
+                            // Emit directly to foreground UI bus
+                            CaptureEventManager.emitScreenshot(imageUri)
+
+                            // Also notify listener (NotificationHelper)
                             onScreenshotDetected(imageUri, pathOrData)
                         }
                     }
@@ -116,12 +122,55 @@ class ScreenshotObserver(
         }
     }
 
-    private fun isScreenshot(path: String, name: String): Boolean {
-        val lowerPath = path.lowercase()
-        val lowerName = name.lowercase()
-        return lowerPath.contains("screenshot") ||
-                lowerName.contains("screenshot") ||
-                lowerName.startsWith("scr_") ||
-                lowerName.contains("chụp màn hình")
+    companion object {
+        fun isScreenshot(path: String, name: String): Boolean {
+            val lowerPath = path.lowercase()
+            val lowerName = name.lowercase()
+            return lowerPath.contains("screenshot") ||
+                    lowerName.contains("screenshot") ||
+                    lowerName.contains("screen") ||
+                    lowerName.startsWith("scr_") ||
+                    lowerName.contains("chụp") ||
+                    lowerPath.contains("pictures") ||
+                    lowerPath.contains("dcim")
+        }
+
+        fun queryLatestScreenshotUri(context: Context): Uri? {
+            try {
+                val projection = arrayOf(
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Images.Media.RELATIVE_PATH else MediaStore.Images.Media.DATA
+                )
+                val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC, ${MediaStore.Images.Media._ID} DESC"
+                context.contentResolver.query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    projection,
+                    null,
+                    null,
+                    sortOrder
+                )?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                        val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+                        val id = cursor.getLong(idCol)
+                        val name = cursor.getString(nameCol) ?: ""
+                        val pathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            cursor.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH)
+                        } else {
+                            cursor.getColumnIndex(MediaStore.Images.Media.DATA)
+                        }
+                        val path = if (pathCol != -1) cursor.getString(pathCol) ?: "" else ""
+
+                        if (isScreenshot(path, name)) {
+                            return ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error querying latest screenshot")
+            }
+            return null
+        }
     }
 }
