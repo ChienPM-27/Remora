@@ -3,6 +3,7 @@ package com.remora.ai
 import io.ktor.utils.io.core.readBytes
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -129,6 +130,11 @@ class GeminiClient(
     private val httpClient: HttpClient = HttpClient(CIO) {
         install(ClientContentNegotiation) {
             json(jsonSerializer)
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 30_000L
+            connectTimeoutMillis = 10_000L
+            socketTimeoutMillis = 30_000L
         }
     }
 ) {
@@ -348,6 +354,11 @@ class GeminiClient(
             it.jsonPrimitive.floatOrNull
         } ?: throw IllegalStateException("Missing embedding values from Gemini response")
 
+        if (values.size != 768) {
+            logger.error("Embedding dimension mismatch from Gemini: expected 768, got ${values.size}")
+            throw IllegalStateException("Embedding dimension mismatch: expected 768, got ${values.size}")
+        }
+
         // L2-normalize vector to make cosine similarity strictly equal to dot product
         var sumSq = 0.0
         for (f in values) sumSq += (f * f)
@@ -482,13 +493,33 @@ fun Application.module() {
     val geminiApiKey = System.getenv("GEMINI_API_KEY") ?: ""
     val geminiClient = GeminiClient(apiKey = geminiApiKey)
 
+    val allowedTaskTypes = setOf("RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY")
+    val maxImageBytes = 5 * 1024 * 1024 // 5 MB
+    val maxCandidates = 20
+
     fun verifyInternalKey(call: ApplicationCall): Boolean {
+        // Enforce fail-closed: If key is not configured in server env, deny all requests
         if (expectedInternalKey.isNullOrBlank()) {
-            return true // If not configured in environment, allow local development
+            logger.error("INTERNAL_SERVICE_KEY is missing in server environment (fail-closed)")
+            return false
         }
         val headerKey = call.request.header("X-Internal-Service-Key")
             ?: call.request.header("X-Internal-Key")
-        return headerKey == expectedInternalKey
+        return !headerKey.isNullOrBlank() && headerKey == expectedInternalKey
+    }
+
+    suspend fun respondGenericAiError(call: ApplicationCall, e: Exception, operation: String) {
+        logger.error("Error during $operation (upstream details masked for client)", e)
+        val errMsg = e.message ?: ""
+        val (statusCode, genericMessage) = when {
+            errMsg.contains("429") ->
+                HttpStatusCode.TooManyRequests to "Hệ thống AI đang quá tải, vui lòng thử lại sau giây lát."
+            errMsg.contains("503") || errMsg.contains("500") ->
+                HttpStatusCode.ServiceUnavailable to "Dịch vụ AI tạm thời không khả dụng, vui lòng thử lại sau."
+            else ->
+                HttpStatusCode.InternalServerError to "Không thể phân tích nội dung lúc này. Vui lòng thử lại sau."
+        }
+        call.respond(statusCode, mapOf("code" to "AI_PROCESSING_ERROR", "message" to genericMessage))
     }
 
     routing {
@@ -511,12 +542,12 @@ fun Application.module() {
         route("/v1/ai") {
             post("/extract-card") {
                 if (!verifyInternalKey(call)) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized: invalid internal service key"))
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("code" to "UNAUTHORIZED", "message" to "Unauthorized: invalid or missing internal service key"))
                     return@post
                 }
 
                 if (geminiApiKey.isBlank()) {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not configured on server"))
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("code" to "CONFIG_ERROR", "message" to "GEMINI_API_KEY is not configured on server"))
                     return@post
                 }
 
@@ -549,7 +580,12 @@ fun Application.module() {
 
                 val rawBytes = imageBytes
                 if (rawBytes == null || rawBytes.isEmpty()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing image part in multipart request"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("code" to "BAD_REQUEST", "message" to "Missing image part in request"))
+                    return@post
+                }
+
+                if (rawBytes.size > maxImageBytes) {
+                    call.respond(HttpStatusCode.PayloadTooLarge, mapOf("code" to "PAYLOAD_TOO_LARGE", "message" to "Image size exceeds 5MB limit"))
                     return@post
                 }
 
@@ -557,25 +593,32 @@ fun Application.module() {
                     val cardResponse = geminiClient.extractCard(rawBytes, userIntent)
                     call.respond(cardResponse)
                 } catch (e: Exception) {
-                    logger.error("Error in extract-card", e)
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Extraction failed")))
+                    respondGenericAiError(call, e, "extract-card")
                 }
             }
 
             post("/embeddings") {
                 if (!verifyInternalKey(call)) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized: invalid internal service key"))
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("code" to "UNAUTHORIZED", "message" to "Unauthorized: invalid or missing internal service key"))
                     return@post
                 }
 
                 if (geminiApiKey.isBlank()) {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not configured on server"))
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("code" to "CONFIG_ERROR", "message" to "GEMINI_API_KEY is not configured on server"))
                     return@post
                 }
 
                 val req = call.receive<EmbeddingRequest>()
                 if (req.text.isBlank()) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "text cannot be empty"))
+                    call.respond(HttpStatusCode.BadRequest, mapOf("code" to "BAD_REQUEST", "message" to "text cannot be empty"))
+                    return@post
+                }
+
+                if (req.task_type !in allowedTaskTypes) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("code" to "INVALID_TASK_TYPE", "message" to "Invalid task_type '${req.task_type}'. Whitelisted values: $allowedTaskTypes")
+                    )
                     return@post
                 }
 
@@ -583,29 +626,35 @@ fun Application.module() {
                     val embedding = geminiClient.embedText(req.text, req.task_type)
                     call.respond(EmbeddingResponse(embedding = embedding, dimension = 768))
                 } catch (e: Exception) {
-                    logger.error("Error in embeddings", e)
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Embedding failed")))
+                    respondGenericAiError(call, e, "embeddings")
                 }
             }
 
             post("/resurface-batch") {
                 if (!verifyInternalKey(call)) {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Unauthorized: invalid internal service key"))
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("code" to "UNAUTHORIZED", "message" to "Unauthorized: invalid or missing internal service key"))
                     return@post
                 }
 
                 if (geminiApiKey.isBlank()) {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "GEMINI_API_KEY is not configured on server"))
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("code" to "CONFIG_ERROR", "message" to "GEMINI_API_KEY is not configured on server"))
                     return@post
                 }
 
                 val req = call.receive<ResurfaceBatchRequest>()
+                if (req.candidates.size > maxCandidates) {
+                    call.respond(
+                        HttpStatusCode.BadRequest,
+                        mapOf("code" to "BAD_REQUEST", "message" to "Candidates list must not exceed $maxCandidates items (received: ${req.candidates.size})")
+                    )
+                    return@post
+                }
+
                 try {
                     val results = geminiClient.batchResurface(req.new_card, req.candidates)
                     call.respond(ResurfaceBatchResponse(results = results))
                 } catch (e: Exception) {
-                    logger.error("Error in resurface-batch", e)
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Resurfacing failed")))
+                    respondGenericAiError(call, e, "resurface-batch")
                 }
             }
         }

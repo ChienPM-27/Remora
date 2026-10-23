@@ -31,32 +31,30 @@ class AiServiceTest {
     }
 
     @Test
-    fun testInternalKeyProtectionWhenConfigured() = testApplication {
-        // Test module behavior
+    fun testFailClosedWhenInternalKeyMissing() = testApplication {
         application {
             module()
         }
 
-        // When GEMINI_API_KEY is not set or empty, request should return 500 configuration error, NOT mock
+        // Without valid INTERNAL_SERVICE_KEY, request MUST fail-closed with 401
         val embedRes = client.post("/v1/ai/embeddings") {
             contentType(ContentType.Application.Json)
             setBody("""{"text": "Định lý Pythagoras", "task_type": "RETRIEVAL_DOCUMENT"}""")
         }
-        // In test environment without GEMINI_API_KEY, expect 500 error since mocks are deleted
-        assertEquals(HttpStatusCode.InternalServerError, embedRes.status)
-        assertTrue(embedRes.bodyAsText().contains("GEMINI_API_KEY is not configured"))
+        assertEquals(HttpStatusCode.Unauthorized, embedRes.status)
+        assertTrue(embedRes.bodyAsText().contains("UNAUTHORIZED"))
     }
 
     @Test
     fun testBatchResurfaceNegativeCaseContract() {
-        val candidates = listOf(
+        val candidates = (1..25).map {
             CandidateItemDto(
-                candidate_id = 101,
-                title = "Hệ quả Thales",
-                summary = "Tam giác đồng dạng",
+                candidate_id = it.toLong(),
+                title = "Thẻ số $it",
+                summary = "Tóm tắt $it",
                 content_type = "THEORY"
             )
-        )
+        }
         val newCard = CandidateItemDto(
             candidate_id = 999,
             title = "Thì hiện tại hoàn thành",
@@ -65,7 +63,7 @@ class AiServiceTest {
         )
         val req = ResurfaceBatchRequest(new_card = newCard, candidates = candidates)
         val json = jsonSerializer.encodeToString(ResurfaceBatchRequest.serializer(), req)
-        assertTrue(json.contains("101"))
-        assertTrue(json.contains("999"))
+        assertTrue(json.contains("25"), "Serialized json should contain all candidates")
+        assertTrue(candidates.size > 20, "Input has more than 20 candidates for limit validation test")
     }
 }

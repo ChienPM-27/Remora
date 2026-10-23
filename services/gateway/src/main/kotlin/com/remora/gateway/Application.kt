@@ -18,6 +18,7 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.ApplicationCallPipeline
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.auth.Authentication
@@ -47,6 +48,7 @@ import org.slf4j.LoggerFactory
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -219,6 +221,19 @@ fun Application.module() {
             ?: call.request.origin.remoteHost
     }
 
+    val maxBodyBytes = 10 * 1024 * 1024L // 10MB
+
+    fun checkBodySize(call: ApplicationCall): Boolean {
+        val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
+        return contentLength == null || contentLength <= maxBodyBytes
+    }
+
+    intercept(ApplicationCallPipeline.Plugins) {
+        val incomingId = call.request.header("X-Request-Id")
+        val requestId = if (!incomingId.isNullOrBlank()) incomingId else UUID.randomUUID().toString()
+        call.response.header("X-Request-Id", requestId)
+    }
+
     routing {
         get("/v1/health") {
             call.respond(mapOf("status" to "UP", "service" to "gateway"))
@@ -304,6 +319,11 @@ fun Application.module() {
                 }
 
                 post("/extract-card") {
+                    if (!checkBodySize(call)) {
+                        call.respond(HttpStatusCode.PayloadTooLarge, ErrorResponse("PAYLOAD_TOO_LARGE", "Request payload exceeds 10MB limit"))
+                        return@post
+                    }
+
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
 
@@ -320,10 +340,12 @@ fun Application.module() {
                     val incomingContentType = call.request.contentType()
 
                     val targetUrl = "$aiServiceUrl/v1/ai/extract-card"
-                    logger.info("Forwarding /v1/ai/extract-card to ai-service: $targetUrl")
+                    val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
+                    logger.info("Forwarding /v1/ai/extract-card to ai-service: $targetUrl [requestId: $requestId]")
 
                     try {
                         val response = httpClient.post(targetUrl) {
+                            header("X-Request-Id", requestId)
                             if (internalServiceKey.isNotBlank()) {
                                 header("X-Internal-Service-Key", internalServiceKey)
                             }
@@ -345,6 +367,11 @@ fun Application.module() {
                 }
 
                 post("/embeddings") {
+                    if (!checkBodySize(call)) {
+                        call.respond(HttpStatusCode.PayloadTooLarge, ErrorResponse("PAYLOAD_TOO_LARGE", "Request payload exceeds 10MB limit"))
+                        return@post
+                    }
+
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
 
@@ -359,10 +386,12 @@ fun Application.module() {
 
                     val requestBytes = call.receive<ByteArray>()
                     val targetUrl = "$aiServiceUrl/v1/ai/embeddings"
-                    logger.info("Forwarding /v1/ai/embeddings to ai-service: $targetUrl")
+                    val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
+                    logger.info("Forwarding /v1/ai/embeddings to ai-service: $targetUrl [requestId: $requestId]")
 
                     try {
                         val response = httpClient.post(targetUrl) {
+                            header("X-Request-Id", requestId)
                             if (internalServiceKey.isNotBlank()) {
                                 header("X-Internal-Service-Key", internalServiceKey)
                             }
@@ -383,6 +412,11 @@ fun Application.module() {
                 }
 
                 post("/resurface-batch") {
+                    if (!checkBodySize(call)) {
+                        call.respond(HttpStatusCode.PayloadTooLarge, ErrorResponse("PAYLOAD_TOO_LARGE", "Request payload exceeds 10MB limit"))
+                        return@post
+                    }
+
                     val principal = call.principal<JWTPrincipal>()
                     val userId = principal?.payload?.getClaim("userId")?.asString() ?: "unknown"
 
@@ -397,10 +431,12 @@ fun Application.module() {
 
                     val requestBytes = call.receive<ByteArray>()
                     val targetUrl = "$aiServiceUrl/v1/ai/resurface-batch"
-                    logger.info("Forwarding /v1/ai/resurface-batch to ai-service: $targetUrl")
+                    val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
+                    logger.info("Forwarding /v1/ai/resurface-batch to ai-service: $targetUrl [requestId: $requestId]")
 
                     try {
                         val response = httpClient.post(targetUrl) {
+                            header("X-Request-Id", requestId)
                             if (internalServiceKey.isNotBlank()) {
                                 header("X-Internal-Service-Key", internalServiceKey)
                             }
