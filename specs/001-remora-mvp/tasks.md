@@ -101,23 +101,25 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 
 - [x] **T007 [P0] [P] Implement Backend Gateway Auth & Quota Guard**
   - **File Paths**:
-    - `services/gateway/src/main/kotlin/com/remora/gateway/auth/AuthModule.kt`
-    - `services/gateway/src/main/kotlin/com/remora/gateway/auth/JwtService.kt`
-    - `services/gateway/src/main/kotlin/com/remora/gateway/quota/QuotaGuard.kt`
+    - `services/gateway/src/main/kotlin/com/remora/gateway/Application.kt`
+    - `services/gateway/src/test/kotlin/com/remora/gateway/GatewayTest.kt`
   - **Acceptance Criteria**:
-    - `POST /v1/auth/login-demo` issues HMAC-SHA256 JWT for `demo_student_01`.
-    - Gateway validates Bearer token and enforces `DEMO_DAILY_QUOTA = 50` via PostgreSQL.
-    - Returns HTTP 429 when quota exceeded with `Retry-After` header.
+    - `POST /v1/auth/login-demo` reads `JWT_SECRET`, `DEMO_USERNAME`, `DEMO_PASSWORD` strictly from env (fails to boot if missing).
+    - IP-based rate limiting on login endpoint (HTTP 429 after 5 failed attempts per minute).
+    - Enforces real user daily quota (50 requests/day) with in-memory thread-safe quota counter.
+    - Proxies all 3 AI endpoints (`/v1/ai/extract-card`, `/v1/ai/embeddings`, `/v1/ai/resurface-batch`) to `ai-service` attaching `X-Internal-Service-Key`.
+    - Implements `/v1/healthz` and `/v1/readyz`; CORS is eliminated.
 
 - [x] **T008 [P0] [P] Implement Backend AI-Service Gemini Multimodal & Embedding Client**
   - **File Paths**:
-    - `services/ai-service/src/main/kotlin/com/remora/ai/client/GeminiClient.kt`
-    - `services/ai-service/src/main/kotlin/com/remora/ai/routes/AiRoutes.kt`
-    - `services/ai-service/src/main/resources/prompts/card_extraction_v1.txt`
+    - `services/ai-service/src/main/kotlin/com/remora/ai/Application.kt`
+    - `services/ai-service/src/test/kotlin/com/remora/ai/AiServiceTest.kt`
   - **Acceptance Criteria**:
-    - Vision extraction calls `gemini-3.5-flash-lite` with fallback to `gemini-3.5-flash`.
-    - Embedding calls `gemini-embedding-2` returning 768 dimensions.
-    - JSON structured output strictly verified against `specs/001-remora-mvp/contracts/card-extraction.json`.
+    - Real Gemini API calls (reads `GEMINI_*` from env). Zero mocks.
+    - Multipart image + `user_intent` extraction via `gemini-3.5-flash-lite` (with fallback to `gemini-3.5-flash` on 429/503).
+    - 768-dimensional L2-normalized embeddings via `gemini-embedding-2` (`RETRIEVAL_DOCUMENT` and `RETRIEVAL_QUERY`).
+    - Single-call batch resurfacing adhering to decisions.md rules, prompt, and JSON response schema.
+    - Strictly checks `INTERNAL_SERVICE_KEY` header for all protected endpoints.
 
 **Checkpoint**: Core foundation and backend mock/services ready. User story implementation can proceed.
 
@@ -137,7 +139,8 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
   - **File Path**: `app/src/main/java/com/remora/capture/ScreenshotObserver.kt`
   - **Acceptance Criteria**:
     - Listens to `MediaStore.Images.Media.EXTERNAL_CONTENT_URI`.
-    - Debounces duplicate OS change notifications within 500ms.
+    - Deduplicates by media ID (`lastHandledMediaId`) and limits to fresh captures ($\le 30$ seconds).
+    - Checks `IS_PENDING` on Android 10+ to wait for OS image file flush.
     - Respects `app_setting.paused == true` by ignoring capture events.
 
 - [x] **T011 [P0] [US1] Implement interactive notification channel with instant actions**
@@ -146,13 +149,17 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - `app/src/main/java/com/remora/capture/CaptureActionReceiver.kt`
   - **Acceptance Criteria**:
     - Displays heads-up notification with action buttons: "Lưu (Save)", "Bỏ qua (Skip)", "Tắt 1h (Mute)", "Tạm dừng (Pause)".
+    - Uses `goAsync()` in `CaptureActionReceiver` to ensure process safety during asynchronous Room writes.
     - Displays within $\le 1.5$s on real device / emulator.
     - Dismisses notification immediately upon tapping any action.
 
 - [x] **T012 [P0] [US1] Implement Foreground Service fallback for background persistence**
-  - **File Path**: `app/src/main/java/com/remora/capture/CaptureForegroundService.kt`
+  - **File Paths**:
+    - `app/src/main/java/com/remora/capture/CaptureForegroundService.kt`
+    - `app/src/main/java/com/remora/MainActivity.kt`
   - **Acceptance Criteria**:
-    - Keeps observer alive when app is minimized or backgrounded.
+    - Requests runtime permissions `READ_MEDIA_IMAGES` and `POST_NOTIFICATIONS` (Android 13+) or `READ_EXTERNAL_STORAGE`.
+    - Service is started safely outside composition (only after permissions are granted).
     - Low-priority persistent notification allows continuous monitoring without OS kill.
 
 **Checkpoint**: User Story 1 fully functional. Screenshot capture prompts appear reliably.
@@ -166,8 +173,9 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 - [x] **T013 [P0] [US2] Unit tests for privacy egress boundary and deduplication**
   - **File Path**: `app/src/test/java/com/remora/data/PrivacyBoundaryTest.kt`
   - **Acceptance Criteria**:
-    - Asserts that skipping/dismissing capture generates 0 network calls and 0 database writes.
-    - Asserts SHA-256 duplicate image detection reuses existing card without network calls.
+    - Real network egress interception asserting SKIP and PAUSE generate strictly 0 network calls and 0 database writes.
+    - Asserts card is created as `PENDING` only after user commits via SAVE action.
+    - Asserts SHA-256 duplicate image detection reuses existing card without network egress.
 
 - [x] **T014 [P0] [US2] Implement Consent Onboarding Screen (Jetpack Compose)**
   - **File Paths**:
@@ -210,12 +218,16 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - Handles HTTP 401 by refreshing demo token; handles HTTP 429 by extracting `Retry-After`.
 
 - [x] **T018 [P0] [US3] Implement CardAnalyzeWorker with WorkManager**
-  - **File Path**: `app/src/main/java/com/remora/work/CardAnalyzeWorker.kt`
+  - **File Paths**:
+    - `app/src/main/java/com/remora/work/CardAnalyzeWorker.kt`
+    - `app/src/test/java/com/remora/work/WorkerErrorClassificationTest.kt`
   - **Acceptance Criteria**:
-    - Ràng buộc `NetworkType.CONNECTED`.
-    - Updates Room card to `DONE`, populating title, summary, tags, ocr_text, embedding BLOB.
-    - On 429/offline: keeps card `PENDING`, retries with exponential backoff.
-    - If `attempt_count >= 3`: sets card `FAILED` with error code and exposes Retry trigger.
+    - Bound to `NetworkType.CONNECTED`.
+    - No mock bytes: unreadable or corrupted images immediately fail as `FAILED`.
+    - Retries upon embedding generation failure.
+    - Classifies HTTP 400/401/403/404 as non-retryable client errors (`FAILED`).
+    - Classifies HTTP 429 and 5xx as retryable with exponential backoff and `Retry-After`.
+    - Wires Retry button in Gallery UI directly to `WorkManager.enqueue()`.
 
 - [x] **T019 [P0] [US3] Implement Compose Gallery Screen with real-time status updates**
   - **File Paths**:
@@ -311,9 +323,13 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - `app/src/main/java/com/remora/resurfacing/ResurfacingManager.kt`
     - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingBanner.kt`
     - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingDetailDialog.kt`
+    - `app/src/main/java/com/remora/capture/NotificationHelper.kt`
+    - `app/src/test/java/com/remora/resurfacing/ResurfacingFlowTest.kt`
   - **Acceptance Criteria**:
+    - Triggered automatically by `CardAnalyzeWorker` immediately after card reaches `DONE` status.
     - Validates batch response using invariants from T025; saves to `resurfacing_result` table.
-    - Displays Resurfacing alert on UI / notification banner.
+    - Observes `resurfacingResultDao.getRecentResultsFlow()` in `GalleryViewModel` and presents banner on `RemoraMainScreen`.
+    - Dispatches high-value notification via `NotificationHelper.showResurfacingAlert`.
     - Shows 3 distinct groups with reasons and benefits; zero popups if result is empty `[]`.
 
 **Checkpoint**: User Story 5 complete. Signature Memory Resurfacing flow operational.
@@ -327,8 +343,9 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 - [x] **T029 [P0] Pre-seed 30–50 canonical demo cards for determinism**
   - **File Path**: `app/src/main/java/com/remora/data/seed/DemoDataSeeder.kt`
   - **Acceptance Criteria**:
-    - Seeds canonical cards for Math, Physics, Chemistry, Computer Science from `scripts/demo-images/`.
-    - All seeded cards have pre-computed vectors and status `DONE`.
+    - Only runs on `BuildConfig.DEBUG` builds; disabled in release.
+    - Replaces all random RNG vectors with deterministic sinusoidal orthogonal projections.
+    - Bundles 10 real educational slide images in `app/src/main/assets/` (no fake/broken URIs).
     - Works offline from local cache during presentation.
 
 - [x] **T030 [P0] Compose UI End-to-End Smoke Test**
