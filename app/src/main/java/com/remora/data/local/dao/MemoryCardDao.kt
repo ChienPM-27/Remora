@@ -38,6 +38,9 @@ interface MemoryCardDao {
     @Query("SELECT COUNT(*) FROM memory_card")
     suspend fun getCardCount(): Int
 
+    @Query("SELECT COUNT(*) FROM memory_card WHERE status = 'DONE' AND embedding IS NOT NULL")
+    suspend fun getDoneCardCount(): Int
+
     @Query("DELETE FROM memory_card")
     suspend fun deleteAllCards()
 }

@@ -68,6 +68,24 @@ class GalleryViewModel(
         }
     }
 
+    fun importCard(
+        imageUri: String,
+        userIntent: String? = null,
+        onCardCreated: (Long) -> Unit
+    ) {
+        viewModelScope.launch {
+            val card = MemoryCard(
+                imageUri = imageUri,
+                createdAt = System.currentTimeMillis(),
+                userIntent = userIntent?.trim()?.ifBlank { null },
+                title = "Đang xử lý...",
+                status = ProcessingStatus.PENDING
+            )
+            val newId = repository.insertCard(card)
+            onCardCreated(newId)
+        }
+    }
+
     fun deleteCard(cardId: Long) {
         viewModelScope.launch {
             repository.deleteCard(cardId)

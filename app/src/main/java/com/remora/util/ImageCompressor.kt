@@ -20,7 +20,15 @@ object ImageCompressor {
         maxDimension: Int = MAX_DIMENSION,
         quality: Int = DEFAULT_QUALITY
     ): ByteArray? {
-        val inputStream: InputStream = context.contentResolver.openInputStream(imageUri) ?: return null
+        val inputStream: InputStream = try {
+            if (imageUri.scheme == "file" && imageUri.path != null) {
+                java.io.File(imageUri.path!!).inputStream()
+            } else {
+                context.contentResolver.openInputStream(imageUri) ?: return null
+            }
+        } catch (_: Exception) {
+            return null
+        }
         return inputStream.use { stream ->
             compressStream(stream, maxDimension, quality)
         }

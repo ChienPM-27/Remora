@@ -127,6 +127,8 @@ class AiGatewayClient(
                     )
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // never swallow cancellation (e.g. user typed a new search query)
         } catch (e: Exception) {
             Timber.e(e, "Network error during AI request")
             Result.failure(e)

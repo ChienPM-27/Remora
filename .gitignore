@@ -17,5 +17,10 @@ remora_docs_extracted.txt
 !.env.example
 bin/
 *.code-workspace
+*.pem
+*.key
+*.p12
+*.jks
+claude-fix/
 
 

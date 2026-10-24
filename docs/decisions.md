@@ -187,3 +187,60 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 * **Tính Tiên quyết cho Buổi Demo (Demo Determinism):**
   - Cơ chế `DemoDataSeeder.kt` tự động nạp 7 thẻ bài giảng chuẩn (Toán Pythagoras, Thales, Xác suất thống kê Gauss, Chuẩn hóa Z-Score, Vật lý Định luật 2 Newton, Thuật toán Tìm kiếm nhị phân) kèm vector 768 chiều L2-normalized ngay khi ứng dụng mở lần đầu. Đảm bảo hoạt động offline 100% không phụ thuộc mạng trong suốt bài thuyết trình trước ban giám khảo.
 
+---
+
+## 8. Triển khai Thực tế AWS EC2 & HTTPS Domain (2026-10-24)
+
+* **Hạ tầng Cloud:**
+  - Máy chủ: AWS EC2 `t3.small` (x86_64, 2 vCPU, 2GB RAM, 20GB gp3 SSD), Region `ap-southeast-1` (Singapore) cho độ trễ thấp nhất tới Việt Nam (~30ms).
+  - Public IP: `13.214.209.56`.
+  - Bộ nhớ đệm (Swap): Tạo 2GB Swap (`/swapfile`), đảm bảo biên dịch và vận hành an toàn tuyệt đối trước OOM.
+* **Tên miền & Chứng chỉ SSL:**
+  - Tên miền: `remora-app.duckdns.org` trỏ về `13.214.209.56`.
+  - Reverse Proxy: Caddy 2.8 tự động cấp và duy trì chứng chỉ SSL hợp lệ từ Let's Encrypt qua giao thức HTTP-01 challenge.
+* **Kiểm thử Thực tế (Live Verification):**
+  - `GET https://remora-app.duckdns.org/v1/health` -> `HTTP 200 OK {"status":"UP","service":"gateway"}`.
+  - `POST https://remora-app.duckdns.org/v1/auth/login-demo` -> `HTTP 200 OK` (trả về Bearer JWT).
+  - `POST https://remora-app.duckdns.org/v1/ai/embeddings` -> `HTTP 200 OK` (trả về vector 768 chiều từ `gemini-embedding-2`).
+* **Cấu hình Client:**
+  - `PROXY_BASE_URL=https://remora-app.duckdns.org/v1` trong `local.properties`.
+  - Debug APK đã được build thành công, sẵn sàng cài đặt và chạy trên bất kỳ thiết bị Android thực tế nào của ban giám khảo.
+
+---
+
+## 9. Tìm kiếm Lai (Hybrid Search) & Thiết kế lại Màn hình Search + Card Detail (2026-10-24)
+
+* **Nguyên nhân bug không tìm thấy bài (VD: "pttk"):**
+  - Ngưỡng cứng cosine `0.65`: query ngắn 4 chữ cái ("pttk") so với vector văn bản dài đạt điểm tương đồng thấp nên bị lọc bỏ hoàn toàn.
+  - Lỗi embedding phía mạng/quota trả về rỗng thay vì fallback tìm kiếm từ khóa cục bộ.
+  - Hai chip "hôm bữa" và "xstk" bị hardcode thay vì bóc tách động từ query.
+* **Quyết định kỹ thuật Search:**
+  - Engine tìm kiếm lai (Hybrid Search): kết hợp từ khóa trên thiết bị (`QueryMatcher.kt` hỗ trợ viết tắt, bỏ dấu tiếng Việt 1:1, khớp chữ cái đầu cụm từ/acronym) + cosine similarity của vector embedding.
+  - Mở rộng từ viết tắt: "pttk" -> "phân tích thiết kế hệ thống" trước khi gửi vector embedding lên gateway.
+  - Fallback an toàn: nếu mất mạng hoặc lỗi embedding, tự động chuyển sang tìm theo từ khóa cục bộ và hiển thị banner thông báo.
+  - Ngưỡng tương đồng mới: `SEMANTIC_ACCEPT = 0.55f`, `SEMANTIC_WEAK = 0.45f` (kèm log Timber để theo dõi).
+  - Cache embedding LRU (24 mục) để tiết kiệm quota.
+  - Hỗ trợ câu truy vấn chỉ có mốc thời gian ("hôm qua", "tuần trước", "tháng trước", "hôm bữa").
+* **Thiết kế lại Giao diện:**
+  - `SearchScreen`: Tiêu đề hiển thị số lượng thẻ đã index, thanh tìm kiếm có spinner loading, lọc theo loại nội dung (Content Type), tô sáng từ khóa khớp, huy hiệu loại khớp (từ khóa / ý nghĩa).
+  - `CardDetailDialog`: Chuyển từ `AlertDialog` sang `ModalBottomSheet` toàn chiều cao, cho phép phóng to ảnh gốc, hiển thị nhãn tiếng Việt thay cho enum, trích dẫn "vì sao bạn lưu", tóm tắt AI và OCR thu gọn có nút sao chép.
+
+---
+
+## 10. Import Ảnh Thư viện vào Dòng Thời gian & Kết nối AI trên Máy ảo (2026-10-24)
+
+* **Vấn đề kết nối AI trên máy ảo Android (Android Emulator):**
+  - Khi chạy backend bằng Docker Compose cục bộ trên máy host, gateway lắng nghe tại `127.0.0.1:8080`.
+  - Từ bên trong máy ảo Android, `localhost` trỏ về chính máy ảo; để truy cập cổng máy host phải sử dụng loopback alias `http://10.0.2.2:8080/v1`.
+  - Cập nhật `local.properties`: `PROXY_BASE_URL=http://10.0.2.2:8080/v1` giúp ứng dụng kết nối trực tiếp đến Gateway và AI Service đang chạy trên Docker cục bộ.
+* **Giải pháp Import ảnh từ Thư viện (PhotoPicker):**
+  - Android Emulator không thể trực tiếp nhận diện thao tác chụp màn hình phần cứng thật trong một số môi trường kiểm thử.
+  - Bổ sung nút "thêm ảnh" trên header màn hình Dòng thời gian (`TimelineScreen.kt`) và nút trong trạng thái rỗng (empty state).
+  - Sử dụng Android Modern PhotoPicker (`ActivityResultContracts.PickVisualMedia.ImageOnly`) an toàn quyền riêng tư, không đòi hỏi xin quyền đọc toàn bộ bộ nhớ thiết bị.
+  - Tạo `ImageImporter.kt`: Sao chép file từ `content://` URI tạm thời của PhotoPicker vào thư mục nội bộ `context.filesDir/imported_images/` thành `file://` URI bền vững để `CardAnalyzeWorker` chạy ngầm không bị `SecurityException`.
+  - Hỗ trợ cả hai schema `file://` và `content://` trong bộ nén ảnh `ImageCompressor.kt`.
+  - Dialog xác nhận `ImportCardDialog`: xem trước ảnh và cho phép người dùng nhập mục đích học tập (`user_intent`), sau đó lưu thẻ dưới dạng `PENDING` và gửi tác vụ xử lý sang WorkManager.
+  - Toàn bộ 46/46 unit tests pass, `lintDebug`, `assembleDebug` thành công. Đã kiểm thử thực tế trên máy ảo: ảnh import được phân tích bởi Gemini qua Docker Gateway và chuyển trạng thái thành `DONE` trong vòng ~4.7s.
+
+
+
