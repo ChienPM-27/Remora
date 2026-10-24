@@ -54,8 +54,8 @@ object ResurfaceValidator {
 
     /**
      * Bộ lọc chuẩn hóa kết quả Resurfacing:
-     * 1. candidate_id khớp input hợp lệ (nếu truyền allowedCandidateIds)
-     * 2. confidence > 0.80 (dùng > thay vì >=)
+     * 1. candidate_id khớp input hợp lệ (nếu truyền allowedCandidateIds), bỏ candidate bị lặp
+     * 2. confidence hữu hạn trong [0,1] và > 0.80 (dùng > thay vì >=)
      * 3. relation phải khớp group
      * 4. Tối đa 2 kết quả mỗi group
      */
@@ -64,9 +64,13 @@ object ResurfaceValidator {
         allowedCandidateIds: Set<Long>? = null
     ): List<ResurfacedItem> {
         val grouped = mutableMapOf<ResurfaceGroup, MutableList<ResurfacedItem>>()
+        val seenCandidateIds = mutableSetOf<Long>()
         for (item in items) {
+            if (!item.confidence.isFinite()) continue
+            if (item.confidence < 0f || item.confidence > 1f) continue
             if (item.confidence <= 0.80f) continue
             if (allowedCandidateIds != null && !allowedCandidateIds.contains(item.candidateCard.id)) continue
+            if (!seenCandidateIds.add(item.candidateCard.id)) continue
             if (!isValidRelationForGroup(item.group, item.relation)) continue
 
             val list = grouped.getOrPut(item.group) { mutableListOf() }

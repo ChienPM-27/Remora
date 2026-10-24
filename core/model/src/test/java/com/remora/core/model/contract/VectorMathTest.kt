@@ -44,4 +44,47 @@ class VectorMathTest {
         val dot = normalized[0] * normalized[0] + normalized[1] * normalized[1]
         assertEquals(1.0f, dot, 1e-5f)
     }
+
+    @Test
+    fun testIsValidEmbeddingAcceptsContractVector() {
+        val vector = VectorMath.l2Normalize(FloatArray(VectorMath.EMBEDDING_DIMENSION) { (it % 13) + 1f })
+        assertTrue(VectorMath.isValidEmbedding(vector))
+    }
+
+    @Test
+    fun testIsValidEmbeddingRejectsNullWrongDimensionAndEmpty() {
+        assertTrue(!VectorMath.isValidEmbedding(null))
+        assertTrue(!VectorMath.isValidEmbedding(FloatArray(0)))
+        assertTrue(!VectorMath.isValidEmbedding(FloatArray(767)))
+        assertTrue(!VectorMath.isValidEmbedding(FloatArray(769)))
+    }
+
+    @Test
+    fun testIsValidEmbeddingRejectsNonFiniteValues() {
+        val nan = FloatArray(VectorMath.EMBEDDING_DIMENSION) { 0.1f }
+        nan[10] = Float.NaN
+        assertTrue(!VectorMath.isValidEmbedding(nan))
+
+        val inf = FloatArray(VectorMath.EMBEDDING_DIMENSION) { 0.1f }
+        inf[10] = Float.POSITIVE_INFINITY
+        assertTrue(!VectorMath.isValidEmbedding(inf))
+    }
+
+    @Test
+    fun testIsValidEmbeddingRejectsZeroNormVector() {
+        assertTrue(!VectorMath.isValidEmbedding(FloatArray(VectorMath.EMBEDDING_DIMENSION)))
+    }
+
+    @Test
+    fun testL2NormalizeLeavesNonFiniteVectorUnchanged() {
+        val v = floatArrayOf(Float.NaN, 1f)
+        val result = VectorMath.l2Normalize(v)
+        assertArrayEquals(v, result, 0f)
+    }
+
+    @Test
+    fun testByteLengthMatchesContract() {
+        val vector = FloatArray(VectorMath.EMBEDDING_DIMENSION) { 0.5f }
+        assertEquals(VectorMath.EMBEDDING_DIMENSION * 4, VectorMath.toByteArray(vector).size)
+    }
 }

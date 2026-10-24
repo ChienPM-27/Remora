@@ -108,4 +108,33 @@ class ResurfaceModelsTest {
         assertFalse(result.hasMemories)
         assertEquals(0, result.totalCount)
     }
+
+    @Test
+    fun testRejectsNonFiniteOrOutOfRangeConfidence() {
+        val items = listOf(
+            ResurfacedItem(createTestCard(1L, "C1"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = Float.NaN),
+            ResurfacedItem(createTestCard(2L, "C2"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = Float.POSITIVE_INFINITY),
+            ResurfacedItem(createTestCard(3L, "C3"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 1.2f),
+            ResurfacedItem(createTestCard(4L, "C4"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = -0.9f),
+            ResurfacedItem(createTestCard(5L, "C5"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 1.0f)
+        )
+
+        val filtered = ResurfaceValidator.filterValidItems(items)
+        assertEquals(1, filtered.size)
+        assertEquals(5L, filtered[0].candidateCard.id)
+    }
+
+    @Test
+    fun testDropsDuplicateCandidateIdKeepingFirstOccurrence() {
+        val card = createTestCard(101L, "Same card")
+        val items = listOf(
+            ResurfacedItem(card, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.95f),
+            ResurfacedItem(card, ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.99f),
+            ResurfacedItem(createTestCard(102L, "Other"), ResurfaceGroup.SIMILAR, ResurfaceRelation.SUPPLEMENT, confidence = 0.85f)
+        )
+
+        val filtered = ResurfaceValidator.filterValidItems(items)
+        assertEquals(2, filtered.size)
+        assertTrue(filtered.all { it.candidateCard.id != 101L || it.confidence == 0.95f })
+    }
 }

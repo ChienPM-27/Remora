@@ -5,7 +5,11 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class CardTags(
     val subject: String = "chưa phân loại",
-    val topics: List<String> = emptyList()
+    val topics: List<String> = emptyList(),
+    // v2 optional hierarchy levels; never fabricated, only stored when evidence exists.
+    val course: String? = null,
+    val chapter: String? = null,
+    val concepts: List<String> = emptyList()
 )
 
 @Serializable

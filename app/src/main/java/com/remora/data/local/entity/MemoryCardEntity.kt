@@ -4,12 +4,10 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.remora.core.model.entity.CardTags
+import com.remora.core.model.entity.CardTagsCodec
 import com.remora.core.model.entity.ContentType
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 @Entity(
     tableName = "memory_card",
@@ -60,11 +58,7 @@ data class MemoryCardEntity(
     val errorCode: String? = null
 ) {
     fun toDomainModel(): MemoryCard {
-        val parsedTags = try {
-            Json.decodeFromString<CardTags>(tagsJson)
-        } catch (_: Exception) {
-            CardTags()
-        }
+        val parsedTags = CardTagsCodec.decode(tagsJson)
 
         val floatEmbedding = embedding?.let { bytes ->
             val floats = FloatArray(bytes.size / 4)
@@ -94,7 +88,7 @@ data class MemoryCardEntity(
 
     companion object {
         fun fromDomainModel(card: MemoryCard): MemoryCardEntity {
-            val tagsJson = Json.encodeToString(card.tags)
+            val tagsJson = CardTagsCodec.encode(card.tags)
             val byteEmbedding = card.embedding?.let { floats ->
                 val buffer = java.nio.ByteBuffer.allocate(floats.size * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                 for (f in floats) {

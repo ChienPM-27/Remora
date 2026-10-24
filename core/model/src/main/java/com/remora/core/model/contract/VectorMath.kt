@@ -6,6 +6,23 @@ import kotlin.math.sqrt
 
 object VectorMath {
 
+    /** Contract dimension for gemini-embedding-2 with outputDimensionality=768 (docs/decisions.md §1.5). */
+    const val EMBEDDING_DIMENSION: Int = 768
+
+    /**
+     * Kiểm tra vector nhúng hợp lệ trước khi lưu: đúng số chiều, toàn bộ giá trị hữu hạn (không NaN/Infinity),
+     * và norm khác 0 để L2-normalize có nghĩa.
+     */
+    fun isValidEmbedding(vector: FloatArray?, expectedDimension: Int = EMBEDDING_DIMENSION): Boolean {
+        if (vector == null || vector.size != expectedDimension) return false
+        var sumSquares = 0f
+        for (v in vector) {
+            if (!v.isFinite()) return false
+            sumSquares += v * v
+        }
+        return sqrt(sumSquares) > 1e-8f
+    }
+
     /**
      * Tính Cosine Similarity giữa 2 vector FloatArray
      * Trả về giá trị trong khoảng [-1.0, 1.0] (thường từ 0.0 đến 1.0 với text embedding)
@@ -66,13 +83,15 @@ object VectorMath {
     }
 
     /**
-     * Chuẩn hóa L2 norm của vector (độ dài = 1)
+     * Chuẩn hóa L2 norm của vector (độ dài = 1).
+     * Vector chứa giá trị không hữu hạn hoặc norm ~0 được trả về nguyên vẹn;
+     * caller phải kiểm tra isValidEmbedding trước khi lưu kết quả.
      */
     fun l2Normalize(vector: FloatArray): FloatArray {
         var sumSquares = 0f
         for (v in vector) sumSquares += v * v
         val norm = sqrt(sumSquares)
-        if (norm < 1e-8) return vector
+        if (!norm.isFinite() || norm < 1e-8) return vector
 
         val result = FloatArray(vector.size)
         for (i in vector.indices) {
