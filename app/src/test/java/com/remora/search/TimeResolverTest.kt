@@ -49,4 +49,27 @@ class TimeResolverTest {
         assertNull(result.startTimeMs)
         assertNull(result.endTimeMs)
     }
+
+    @Test
+    fun timeOnlyQueryLeavesBlankCleanQueryAndALabel() {
+        val result = TimeResolver.resolve("hôm qua", now = 1700000000000L)
+        assertEquals("", result.cleanQuery)
+        assertEquals("hôm qua", result.label)
+        assertNotNull(result.startTimeMs)
+    }
+
+    @Test
+    fun labelsAreNullWithoutTimePhrase() {
+        assertNull(TimeResolver.resolve("pttk").label)
+    }
+
+    @Test
+    fun resolveThangTruocCoversPreviousCalendarMonth() {
+        val now = 1700000000000L // 2023-11-14 UTC
+        val result = TimeResolver.resolve("bài tập tháng trước", now = now)
+        assertEquals("bài tập", result.cleanQuery)
+        assertTrue(result.endTimeMs!! < now)
+        val spanDays = (result.endTimeMs!! - result.startTimeMs!!) / (1000 * 60 * 60 * 24)
+        assertTrue(spanDays in 27..30)
+    }
 }

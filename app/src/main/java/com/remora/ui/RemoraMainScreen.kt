@@ -1,6 +1,7 @@
 package com.remora.ui
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,6 +60,7 @@ import com.remora.ui.theme.RemoraBorder
 import com.remora.ui.theme.RemoraNavyDark
 import com.remora.ui.theme.RemoraSubtleText
 import com.remora.ui.timeline.TimelineScreen
+import com.remora.util.ImageImporter
 import com.remora.work.CardAnalyzeWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -103,6 +105,9 @@ fun RemoraMainScreen(
     val roomResurfacedItems by galleryViewModel.resurfacedItems.collectAsState()
     val searchQuery by searchViewModel.query.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
+    val searchIsSearching by searchViewModel.isSearching.collectAsState()
+    val searchRecent by searchViewModel.recentQueries.collectAsState()
+    val searchIndexedCount by searchViewModel.indexedCount.collectAsState()
 
     Scaffold(
         bottomBar = {
@@ -237,6 +242,30 @@ fun RemoraMainScreen(
                                 WorkManager.getInstance(context).enqueue(request)
                             }
                         },
+                        onImportImage = { uri, userIntent ->
+                            val persistentUri = try {
+                                ImageImporter.copyUriToInternalStorage(context, uri)
+                            } catch (e: Exception) {
+                                Timber.e(e, "Failed to copy imported image")
+                                null
+                            }
+                            if (persistentUri != null) {
+                                galleryViewModel.importCard(persistentUri, userIntent) { cardId ->
+                                    val request = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
+                                        .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to cardId))
+                                        .setConstraints(
+                                            Constraints.Builder()
+                                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                                .build()
+                                        )
+                                        .build()
+                                    WorkManager.getInstance(context).enqueue(request)
+                                    Toast.makeText(context, "Đã thêm thẻ! AI đang xử lý...", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Không thể đọc ảnh đã chọn", Toast.LENGTH_SHORT).show()
+                            }
+                        },
                         onNavigateToSearch = { currentTab = MainNavigationTab.SEARCH }
                     )
                 }
@@ -245,7 +274,11 @@ fun RemoraMainScreen(
                     SearchScreen(
                         query = searchQuery,
                         uiState = searchUiState,
-                        onQueryChanged = searchViewModel::onQueryChanged
+                        onQueryChanged = searchViewModel::onQueryChanged,
+                        isSearching = searchIsSearching,
+                        recentQueries = searchRecent,
+                        indexedCount = searchIndexedCount,
+                        onSubmit = searchViewModel::onSearchSubmit
                     )
                 }
 
