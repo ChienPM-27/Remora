@@ -291,7 +291,8 @@ fun RemoraMainScreen(
                 MainNavigationTab.RESURFACE -> {
                     ResurfacingScreen(
                         items = resurfacedState.items,
-                        latestCard = resurfacedState.sourceCard ?: cards.firstOrNull()
+                        sourceCard = resurfacedState.sourceCard,
+                        latestCard = cards.firstOrNull()
                     )
                 }
 
