@@ -3,6 +3,7 @@ package com.remora.ui.resurfacing
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -120,7 +121,7 @@ fun resolveResurfacingUiState(
     items: List<ResurfacedItem>,
     latestCard: MemoryCard?
 ): ResurfacingUiState {
-    val effectiveSourceCard = sourceCard ?: if (items.isNotEmpty()) latestCard else null
+    val effectiveSourceCard = sourceCard
 
     // 1. No cards in database at all
     if (latestCard == null && effectiveSourceCard == null) {
@@ -136,19 +137,22 @@ fun resolveResurfacingUiState(
     if (latestCard != null && latestCard.status == ProcessingStatus.PENDING) {
         return ResurfacingUiState(
             headerCard = latestCard,
-            headerTitle = latestCard.title.ifBlank { "Đang xử lý..." },
+            headerTitle = resolveCardTitle(latestCard, "Đang xử lý..."),
             items = emptyList(),
             emptyReason = ResurfacingEmptyReason.LATEST_PENDING
         )
     }
 
     // 3. A newer card exists in database compared to sourceCard, but generated no results
-    if (latestCard != null && effectiveSourceCard != null &&
-        latestCard.id != effectiveSourceCard.id && latestCard.createdAt >= effectiveSourceCard.createdAt
-    ) {
+    val isLatestNewerThanSource = latestCard != null && effectiveSourceCard != null && (
+        latestCard.createdAt > effectiveSourceCard.createdAt ||
+        (latestCard.createdAt == effectiveSourceCard.createdAt && latestCard.id > effectiveSourceCard.id)
+    )
+
+    if (isLatestNewerThanSource) {
         return ResurfacingUiState(
             headerCard = latestCard,
-            headerTitle = latestCard.title.ifBlank { "Bài học vừa lưu" },
+            headerTitle = resolveCardTitle(latestCard, "Bài học vừa lưu"),
             items = emptyList(),
             emptyReason = ResurfacingEmptyReason.NO_CONFIDENT_LINKS
         )
@@ -156,7 +160,7 @@ fun resolveResurfacingUiState(
 
     // 4. Source card available
     if (effectiveSourceCard != null) {
-        val title = effectiveSourceCard.title.ifBlank { "Bài học vừa lưu" }
+        val title = resolveCardTitle(effectiveSourceCard, "Bài học vừa lưu")
         return if (items.isNotEmpty()) {
             ResurfacingUiState(
                 headerCard = effectiveSourceCard,
@@ -175,13 +179,27 @@ fun resolveResurfacingUiState(
     }
 
     // 5. Only latestCard is available (DONE/FAILED, but no resurfacing links)
-    val title = latestCard?.title?.ifBlank { "Bài học vừa lưu" } ?: "Bài học vừa lưu"
+    val title = if (latestCard != null) {
+        resolveCardTitle(latestCard, "Bài học vừa lưu")
+    } else {
+        "Bài học vừa lưu"
+    }
+
     return ResurfacingUiState(
         headerCard = latestCard,
         headerTitle = title,
         items = emptyList(),
         emptyReason = ResurfacingEmptyReason.NO_CONFIDENT_LINKS
     )
+}
+
+private fun resolveCardTitle(card: MemoryCard, defaultFallback: String): String {
+    val intent = card.userIntent
+    return when {
+        card.title.isNotBlank() && card.title != "Đang xử lý..." -> card.title
+        !intent.isNullOrBlank() -> intent
+        else -> card.title.ifBlank { defaultFallback }
+    }
 }
 
 @Composable
@@ -276,8 +294,9 @@ fun ResurfacingScreen(
                         items = group.items,
                         key = { _, item -> item.candidateCard.id }
                     ) { index, item ->
+                        val globalIndex = displayGroups.take(groupIndex).sumOf { it.items.size } + index + 1
                         ResurfacingItemRow(
-                            index = index + 1,
+                            index = globalIndex,
                             item = item,
                             onClick = { selectedCard = item.candidateCard }
                         )
@@ -543,6 +562,12 @@ private fun ResurfacingItemRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 42.dp, top = 8.dp, bottom = 4.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        // Consume clicks inside the details container so tapping text doesn't open the card detail sheet
+                    }
             ) {
                 Column(modifier = Modifier.padding(10.dp)) {
                     if (item.newInfo.isNotBlank()) {

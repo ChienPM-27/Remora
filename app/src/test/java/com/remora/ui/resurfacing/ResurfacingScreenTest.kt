@@ -228,4 +228,58 @@ class ResurfacingScreenTest {
 
         assertEquals("Java: public static void main(String[] args)", state.headerTitle)
     }
+
+    @Test
+    fun resolveResurfacingUiState_latestPendingWithUserIntent_prefersUserIntentWhenTitleIsDefault() {
+        val pendingCard = createTestCard(
+            id = 10L,
+            title = "Đang xử lý...",
+            status = ProcessingStatus.PENDING
+        ).copy(userIntent = "Ôn tập giải tích 12")
+
+        val state = resolveResurfacingUiState(
+            sourceCard = null,
+            items = emptyList(),
+            latestCard = pendingCard
+        )
+
+        assertEquals(ResurfacingEmptyReason.LATEST_PENDING, state.emptyReason)
+        assertEquals("Ôn tập giải tích 12", state.headerTitle)
+        assertEquals(10L, state.headerCard?.id)
+    }
+
+    @Test
+    fun resolveResurfacingUiState_orphanItemsWithoutSourceCard_doesNotAttributeToLatestCard() {
+        val orphanItems = listOf(createItem(100L, "Liên kết mồ côi", ResurfaceGroup.SIMILAR, 0.90f))
+        val latestCard = createTestCard(id = 20L, title = "Bài mới tinh", status = ProcessingStatus.DONE)
+
+        val state = resolveResurfacingUiState(
+            sourceCard = null,
+            items = orphanItems,
+            latestCard = latestCard
+        )
+
+        assertEquals(ResurfacingEmptyReason.NO_CONFIDENT_LINKS, state.emptyReason)
+        assertEquals("Bài mới tinh", state.headerTitle)
+        assertTrue(state.items.isEmpty())
+        assertEquals(20L, state.headerCard?.id)
+    }
+
+    @Test
+    fun resolveResurfacingUiState_sameTimestampTieBreak_correctlyIdentifiesNewerCard() {
+        val oldSourceCard = createTestCard(id = 5L, title = "Bài cũ", createdAt = 5000L)
+        val oldItems = listOf(createItem(10L, "Liên kết cũ", ResurfaceGroup.SIMILAR, 0.85f))
+        val newCardNoResults = createTestCard(id = 6L, title = "Bài mới cùng timestamp", status = ProcessingStatus.DONE, createdAt = 5000L)
+
+        val state = resolveResurfacingUiState(
+            sourceCard = oldSourceCard,
+            items = oldItems,
+            latestCard = newCardNoResults
+        )
+
+        assertEquals(ResurfacingEmptyReason.NO_CONFIDENT_LINKS, state.emptyReason)
+        assertEquals("Bài mới cùng timestamp", state.headerTitle)
+        assertTrue(state.items.isEmpty())
+        assertEquals(6L, state.headerCard?.id)
+    }
 }
