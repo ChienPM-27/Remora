@@ -242,5 +242,30 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - Dialog xác nhận `ImportCardDialog`: xem trước ảnh và cho phép người dùng nhập mục đích học tập (`user_intent`), sau đó lưu thẻ dưới dạng `PENDING` và gửi tác vụ xử lý sang WorkManager.
   - Toàn bộ 46/46 unit tests pass, `lintDebug`, `assembleDebug` thành công. Đã kiểm thử thực tế trên máy ảo: ảnh import được phân tích bởi Gemini qua Docker Gateway và chuyển trạng thái thành `DONE` trong vòng ~4.7s.
 
+---
+
+## 11. Tách cờ Đồng ý (Consent) khỏi Cờ Thông báo & Cập nhật Cài đặt theo Từng Cột (2026-10-24)
+
+* **Vấn đề phát hiện:**
+  - `ConsentViewModel` trước đây suy đoán trạng thái đồng ý từ `setting.notificationsEnabled`. Khi người dùng tắt thông báo (đặt `notificationsEnabled = false`), lần mở ứng dụng tiếp theo bị hiển thị lại màn hình đồng ý (Consent Screen).
+  - Có 4 vị trí gọi `insertOrUpdate(AppSettingEntity(id = 1L, ...))` làm mất cờ khác (ví dụ: "Tạm dừng" vô tình ghi đè `notificationsEnabled = true` và `pauseUntil = 0L`).
+  - Trạng thái `paused` chỉ được đặt lại `false` trong `grantConsent`, không có luồng độc lập tiếp tục theo dõi.
+* **Quyết định kỹ thuật:**
+  - Bổ sung cột `consent_granted` (Boolean, default `false`) vào bảng `app_setting`.
+  - Phân định rõ ngữ nghĩa 4 cờ trong `app_setting`:
+    - `consent_granted`: chỉ `ConsentViewModel` đọc/ghi để xác định người dùng đã qua bước onboarding/consent hay chưa.
+    - `notifications_enabled`: bật/tắt thông báo gợi nhớ (`resurfacing alert`).
+    - `paused`: tạm dừng theo dõi ảnh chụp cho đến khi người dùng tiếp tục.
+    - `pause_until`: thời điểm epoch ms tạm dừng có thời hạn (dùng cho tính năng "Tắt 1 giờ").
+  - Nâng cấp phiên bản Room từ 1 lên 2 với explicit migration:
+    - `ALTER TABLE app_setting ADD COLUMN consent_granted INTEGER NOT NULL DEFAULT 0;`
+    - `UPDATE app_setting SET consent_granted = 1;` (các dòng hiện có đều được tạo sau khi người dùng đã đồng ý).
+    - Xuất schema `2.json`, đăng ký `addMigrations(MIGRATION_1_2)` vào database builder cho mọi build, giữ `fallbackToDestructiveMigration()` ở debug.
+  - Cập nhật `AppSettingDao`: thêm `ensureRow()` (`INSERT OR IGNORE`) và các câu lệnh `UPDATE` theo từng cột độc lập: `setConsent`, `setPaused`, `setPauseUntil`, `setNotificationsEnabled`. Loại bỏ việc ghi đè toàn bộ entity bằng `insertOrUpdate`.
+  - Xây dựng logic thuần `CapturePolicy`:
+    - `isCaptureSuppressed(setting, nowMs) = paused || pauseUntil > nowMs` (với `setting == null` mặc định `false` - không bị chặn).
+    - `shouldShowResurfacingAlert(setting)` (với `setting == null` mặc định `true` - bật thông báo).
+  - Viết unit tests kiểm thử logic `CapturePolicy` và `ConsentViewModel` với fake DAO, viết `MigrationTest` (androidTest) kiểm chứng migration Room từ schema 1 lên schema 2.
+
 
 

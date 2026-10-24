@@ -7,7 +7,6 @@ import androidx.core.app.RemoteInput
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.RemoraDatabase
-import com.remora.data.local.entity.AppSettingEntity
 import com.remora.data.local.entity.MemoryCardEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,9 +68,8 @@ class CaptureActionReceiver : BroadcastReceiver() {
 
                         NotificationHelper.ACTION_PAUSE -> {
                             val db = RemoraDatabase.getInstance(context)
-                            db.appSettingDao().insertOrUpdate(
-                                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
-                            )
+                            db.appSettingDao().ensureRow()
+                            db.appSettingDao().setPaused(true)
                             Timber.i("Screenshot monitoring paused by user.")
                         }
                     }

@@ -50,7 +50,7 @@ Placeholders to fill: `applicationId = com.remora`, `minSdk = 28`, `PROXY_BASE_U
 
 - `memory_card`: id, image_uri, created_at, user_intent, title, summary, tags_json (`{subject, topics[]}`), content_type, ocr_text, embedding (BLOB), status (`PENDING | DONE | FAILED`), attempt_count, error_code
 - `resurfacing_result`: id, new_card_id, candidate_card_id, group, relation, new_info, benefit, reason, confidence, created_at
-- `app_setting`: notifications_enabled, paused
+- `app_setting`: id, consent_granted, notifications_enabled, paused, pause_until
 
 Use enums (not free strings) for `status`, `content_type`, `group`, `relation`.
 

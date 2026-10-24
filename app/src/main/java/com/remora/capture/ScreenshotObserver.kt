@@ -37,8 +37,8 @@ class ScreenshotObserver(
             try {
                 val db = RemoraDatabase.getInstance(context)
                 val setting = db.appSettingDao().getSetting()
-                if (setting?.paused == true) {
-                    Timber.d("Screenshot capture ignored: user has paused monitoring.")
+                if (CapturePolicy.isCaptureSuppressed(setting, System.currentTimeMillis())) {
+                    Timber.d("Screenshot capture ignored: monitoring is paused or temporarily suppressed.")
                     return@launch
                 }
 

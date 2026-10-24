@@ -101,11 +101,14 @@ class CardAnalyzeWorker(
                 try {
                     val resurfacedItems = resurfacingManager.runResurfacingPipeline(updatedCard)
                     if (resurfacedItems.isNotEmpty()) {
-                        com.remora.capture.NotificationHelper.showResurfacingAlert(
-                            context = applicationContext,
-                            cardTitle = updatedCard.title,
-                            matchCount = resurfacedItems.size
-                        )
+                        val setting = db.appSettingDao().getSetting()
+                        if (com.remora.capture.CapturePolicy.shouldShowResurfacingAlert(setting)) {
+                            com.remora.capture.NotificationHelper.showResurfacingAlert(
+                                context = applicationContext,
+                                cardTitle = updatedCard.title,
+                                matchCount = resurfacedItems.size
+                            )
+                        }
                     }
                 } catch (resurfaceEx: Exception) {
                     Timber.w(resurfaceEx, "Resurfacing pipeline failed silently without breaking card DONE status")

@@ -46,7 +46,6 @@ import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
 import com.remora.core.model.resurface.ResurfacedItem
 import com.remora.data.local.RemoraDatabase
-import com.remora.data.local.entity.AppSettingEntity
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.ui.capture.SavePromptSheet
 import com.remora.ui.gallery.GalleryViewModel
@@ -342,18 +341,16 @@ fun RemoraMainScreen(
             onToggleNotifications = {
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    db.appSettingDao().insertOrUpdate(
-                        AppSettingEntity(id = 1L, notificationsEnabled = false, paused = false)
-                    )
+                    db.appSettingDao().ensureRow()
+                    db.appSettingDao().setNotificationsEnabled(false)
                 }
                 activeCaptureUri = null
             },
             onPauseMonitoring = {
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    db.appSettingDao().insertOrUpdate(
-                        AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
-                    )
+                    db.appSettingDao().ensureRow()
+                    db.appSettingDao().setPaused(true)
                 }
                 activeCaptureUri = null
             }

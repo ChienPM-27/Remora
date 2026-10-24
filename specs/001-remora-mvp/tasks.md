@@ -86,9 +86,9 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - `app/src/main/java/com/remora/data/local/AppSettingDao.kt`
     - `app/src/main/java/com/remora/data/local/Converters.kt`
   - **Acceptance Criteria**:
-    - Tables `memory_card`, `resurfacing_result`, `app_setting` match `data-model.md`.
+    - Tables `memory_card`, `resurfacing_result`, `app_setting` match `data-model.md`. Room v2 explicit migration preserves user consent state.
     - `Converters.kt` serializes 768 Float32 arrays into 3,072-byte BLOBs (little-endian) and tags into JSON.
-    - Room DAOs expose reactive Kotlin `Flow<List<MemoryCard>>`.
+    - Room DAOs expose reactive Kotlin `Flow<List<MemoryCard>>`. Granular column updates for `app_setting` via `ensureRow()`, `setConsent`, `setPaused`, `setPauseUntil`, `setNotificationsEnabled`.
 
 - [x] **T006 [P0] [P] Implement image processing utilities (SHA-256 deduplication & compression)**
   - **File Paths**:
@@ -183,7 +183,7 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - `app/src/main/java/com/remora/ui/consent/ConsentViewModel.kt`
   - **Acceptance Criteria**:
     - Clear Vietnamese disclosure: "Ảnh chỉ rời thiết bị sau khi bấm Lưu; server không lưu ảnh".
-    - Stores consent state in `app_setting`. Screenshot monitoring only activates after consent granted.
+    - Stores consent state in `app_setting.consent_granted` (separated from `notifications_enabled`). Screenshot monitoring only activates after consent granted.
 
 - [x] **T015 [P0] [US2] Implement inline intent capture and PENDING card insertion**
   - **File Paths**:
