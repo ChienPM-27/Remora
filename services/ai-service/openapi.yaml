@@ -21,7 +21,7 @@ paths:
   /ai/extract-card:
     post:
       summary: Extract card metadata and OCR text via gemini-3.5-flash-lite (primary) with gemini-3.5-flash fallback
-      description: Internal endpoint receiving base64 image data and user intent to perform structured card extraction with Gemini 3.5 Flash.
+      description: Internal endpoint receiving base64 image data and user intent to perform structured card extraction with gemini-3.5-flash-lite (primary) with gemini-3.5-flash fallback.
       operationId: internalExtractCard
       tags:
         - Internal AI

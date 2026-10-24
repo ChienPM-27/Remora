@@ -57,7 +57,7 @@ fun ResurfacingScreen(
     val primaryTitle = remember(latestCard, items) {
         when {
             latestCard != null && latestCard.title.isNotBlank() -> latestCard.title.lowercase()
-            items.isNotEmpty() -> "slide phân phối chuẩn"
+            items.isNotEmpty() -> items.first().candidateCard.title.ifBlank { "gợi nhớ" }.lowercase()
             else -> "chưa có bài học mới"
         }
     }
