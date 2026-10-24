@@ -262,14 +262,28 @@ class GeminiClient(
             if (fallbackResponse.status.value == 200) {
                 return fallbackResponse.bodyAsText()
             }
-            val errBody = fallbackResponse.bodyAsText()
-            logger.error("Fallback model $fallbackModel failed with HTTP ${fallbackResponse.status.value}: $errBody")
-            throw RuntimeException("Gemini API error ${fallbackResponse.status.value}: $errBody")
+            val errSummary = summarizeUpstreamError(fallbackResponse.status.value, fallbackResponse.bodyAsText())
+            logger.error("Fallback model $fallbackModel failed: $errSummary")
+            throw RuntimeException("Gemini API error ${fallbackResponse.status.value}")
         } else {
-            val errBody = primaryResponse.bodyAsText()
-            logger.error("Primary model $primaryModel error HTTP $primaryStatus: $errBody")
-            throw RuntimeException("Gemini API error $primaryStatus: $errBody")
+            val errSummary = summarizeUpstreamError(primaryStatus, primaryResponse.bodyAsText())
+            logger.error("Primary model $primaryModel failed: $errSummary")
+            throw RuntimeException("Gemini API error $primaryStatus")
         }
+    }
+
+    /**
+     * Reduce an upstream error body to a status line. Gemini error bodies may echo request
+     * fragments on schema errors, so raw bodies never reach logs or exception messages.
+     */
+    private fun summarizeUpstreamError(status: Int, body: String): String {
+        val upstreamCode = try {
+            jsonSerializer.parseToJsonElement(body).jsonObject["error"]?.jsonObject
+                ?.get("status")?.jsonPrimitive?.contentOrNull
+        } catch (_: Exception) {
+            null
+        }
+        return "status=$status upstreamCode=${upstreamCode ?: "unknown"}"
     }
 
     suspend fun extractCard(imageBytes: ByteArray, userIntent: String?): ExtractCardResponse {
@@ -344,9 +358,9 @@ class GeminiClient(
         }
 
         if (response.status.value != 200) {
-            val err = response.bodyAsText()
-            logger.error("Embedding call failed HTTP ${response.status.value}: $err")
-            throw RuntimeException("Gemini embedding error ${response.status.value}: $err")
+            val errSummary = summarizeUpstreamError(response.status.value, response.bodyAsText())
+            logger.error("Embedding call failed: $errSummary")
+            throw RuntimeException("Gemini embedding error ${response.status.value}")
         }
 
         val root = jsonSerializer.parseToJsonElement(response.bodyAsText()).jsonObject
@@ -509,12 +523,17 @@ fun Application.module() {
     }
 
     suspend fun respondGenericAiError(call: ApplicationCall, e: Exception, operation: String) {
-        logger.error("Error during $operation (upstream details masked for client)", e)
         val errMsg = e.message ?: ""
+        // Log the exception class and upstream status only: Gemini error bodies can echo
+        // request fragments, so the raw message must not reach logs or the client.
+        val upstreamStatus = Regex("\\b(\\d{3})\\b").find(errMsg)?.groupValues?.get(1)
+        logger.error("Error during $operation: ${e.javaClass.simpleName} upstreamStatus=$upstreamStatus")
         val (statusCode, genericMessage) = when {
-            errMsg.contains("429") ->
+            upstreamStatus == "429" ->
                 HttpStatusCode.TooManyRequests to "Hệ thống AI đang quá tải, vui lòng thử lại sau giây lát."
-            errMsg.contains("503") || errMsg.contains("500") ->
+            errMsg.contains("timeout", ignoreCase = true) ->
+                HttpStatusCode.GatewayTimeout to "Hệ thống AI phản hồi quá chậm, vui lòng thử lại sau."
+            upstreamStatus == "503" || upstreamStatus == "500" ->
                 HttpStatusCode.ServiceUnavailable to "Dịch vụ AI tạm thời không khả dụng, vui lòng thử lại sau."
             else ->
                 HttpStatusCode.InternalServerError to "Không thể phân tích nội dung lúc này. Vui lòng thử lại sau."
@@ -573,7 +592,12 @@ fun Application.module() {
                 } else {
                     val jsonReq = try { call.receive<ExtractCardJsonRequest>() } catch (_: Exception) { null }
                     if (jsonReq?.image_base64 != null) {
-                        imageBytes = Base64.getDecoder().decode(jsonReq.image_base64)
+                        imageBytes = try {
+                            Base64.getDecoder().decode(jsonReq.image_base64)
+                        } catch (_: IllegalArgumentException) {
+                            call.respond(HttpStatusCode.BadRequest, mapOf("code" to "INVALID_BASE64", "message" to "image_base64 is not valid Base64"))
+                            return@post
+                        }
                     }
                     userIntent = jsonReq?.user_intent
                 }

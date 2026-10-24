@@ -4,6 +4,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 import io.ktor.client.request.header
 import io.ktor.client.request.post
@@ -169,6 +170,12 @@ class UserQuotaManager(
             }
         }
     }
+
+    /** Give back one consumed unit when the attempt failed for reasons outside the user's control. */
+    fun refund(userId: String, type: QuotaType) {
+        val key = buildKey(userId, type, clock())
+        usageMap[key]?.updateAndGet { (it - 1).coerceAtLeast(0) }
+    }
 }
 
 fun Application.module() {
@@ -192,6 +199,11 @@ fun Application.module() {
                 ignoreUnknownKeys = true
                 isLenient = true
             })
+        }
+        install(HttpTimeout) {
+            // ai-service waits up to ~30s on Gemini; leave headroom before failing with 502.
+            connectTimeoutMillis = 5_000
+            requestTimeoutMillis = 45_000
         }
     }
 
@@ -231,6 +243,57 @@ fun Application.module() {
     fun checkBodySize(call: ApplicationCall): Boolean {
         val contentLength = call.request.header(HttpHeaders.ContentLength)?.toLongOrNull()
         return contentLength == null || contentLength <= maxBodyBytes
+    }
+
+    /**
+     * Shared proxy for the three AI endpoints. Contract:
+     * - response body/status pass through verbatim; Retry-After is forwarded so the Android
+     *   client can honor server-side rate limits;
+     * - quota is refunded when the failure is upstream (429/5xx) or transport-level, so users
+     *   do not burn their daily budget on failed attempts;
+     * - the client-facing 502 body is generic: internal infrastructure details stay in logs.
+     */
+    suspend fun forwardToAiService(
+        call: ApplicationCall,
+        userId: String,
+        quotaType: QuotaType,
+        path: String,
+        requestBytes: ByteArray,
+        contentType: ContentType?
+    ) {
+        val targetUrl = "$aiServiceUrl$path"
+        val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
+        logger.info("Forwarding $path to ai-service [requestId: $requestId]")
+        try {
+            val response = httpClient.post(targetUrl) {
+                header("X-Request-Id", requestId)
+                if (internalServiceKey.isNotBlank()) {
+                    header("X-Internal-Service-Key", internalServiceKey)
+                }
+                header(HttpHeaders.ContentType, contentType?.toString() ?: ContentType.Application.Json.toString())
+                setBody(requestBytes)
+            }
+
+            response.headers["Retry-After"]?.let { retryAfter ->
+                call.response.header("Retry-After", retryAfter)
+            }
+            if (response.status.value == 429 || response.status.value >= 500) {
+                quotaManager.refund(userId, quotaType)
+            }
+
+            call.respondBytes(
+                bytes = response.readBytes(),
+                contentType = response.contentType() ?: ContentType.Application.Json,
+                status = response.status
+            )
+        } catch (e: Exception) {
+            logger.error("Failed to forward $path to ai-service: ${e.javaClass.simpleName}", e)
+            quotaManager.refund(userId, quotaType)
+            call.respond(
+                HttpStatusCode.BadGateway,
+                ErrorResponse("BAD_GATEWAY", "Dịch vụ AI tạm thời không khả dụng, vui lòng thử lại sau.")
+            )
+        }
     }
 
     intercept(ApplicationCallPipeline.Plugins) {
@@ -344,31 +407,14 @@ fun Application.module() {
                     val requestBytes = call.receive<ByteArray>()
                     val incomingContentType = call.request.contentType()
 
-                    val targetUrl = "$aiServiceUrl/v1/ai/extract-card"
-                    val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
-                    logger.info("Forwarding /v1/ai/extract-card to ai-service: $targetUrl [requestId: $requestId]")
-
-                    try {
-                        val response = httpClient.post(targetUrl) {
-                            header("X-Request-Id", requestId)
-                            if (internalServiceKey.isNotBlank()) {
-                                header("X-Internal-Service-Key", internalServiceKey)
-                            }
-                            header(HttpHeaders.ContentType, incomingContentType.toString())
-                            setBody(requestBytes)
-                        }
-
-                        val responseBytes = response.readBytes()
-                        val responseContentType = response.contentType() ?: ContentType.Application.Json
-                        call.respondBytes(
-                            bytes = responseBytes,
-                            contentType = responseContentType,
-                            status = response.status
-                        )
-                    } catch (e: Exception) {
-                        logger.error("Failed to forward extract-card to ai-service", e)
-                        call.respond(HttpStatusCode.BadGateway, ErrorResponse("BAD_GATEWAY", "ai-service is unreachable: ${e.message}"))
-                    }
+                    forwardToAiService(
+                        call = call,
+                        userId = userId,
+                        quotaType = QuotaType.EXTRACT_CARD,
+                        path = "/v1/ai/extract-card",
+                        requestBytes = requestBytes,
+                        contentType = incomingContentType
+                    )
                 }
 
                 post("/embeddings") {
@@ -390,30 +436,15 @@ fun Application.module() {
                     }
 
                     val requestBytes = call.receive<ByteArray>()
-                    val targetUrl = "$aiServiceUrl/v1/ai/embeddings"
-                    val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
-                    logger.info("Forwarding /v1/ai/embeddings to ai-service: $targetUrl [requestId: $requestId]")
 
-                    try {
-                        val response = httpClient.post(targetUrl) {
-                            header("X-Request-Id", requestId)
-                            if (internalServiceKey.isNotBlank()) {
-                                header("X-Internal-Service-Key", internalServiceKey)
-                            }
-                            contentType(ContentType.Application.Json)
-                            setBody(requestBytes)
-                        }
-
-                        val responseBytes = response.readBytes()
-                        call.respondBytes(
-                            bytes = responseBytes,
-                            contentType = response.contentType() ?: ContentType.Application.Json,
-                            status = response.status
-                        )
-                    } catch (e: Exception) {
-                        logger.error("Failed to forward embeddings to ai-service", e)
-                        call.respond(HttpStatusCode.BadGateway, ErrorResponse("BAD_GATEWAY", "ai-service is unreachable: ${e.message}"))
-                    }
+                    forwardToAiService(
+                        call = call,
+                        userId = userId,
+                        quotaType = QuotaType.EMBEDDINGS,
+                        path = "/v1/ai/embeddings",
+                        requestBytes = requestBytes,
+                        contentType = ContentType.Application.Json
+                    )
                 }
 
                 post("/resurface-batch") {
@@ -435,30 +466,15 @@ fun Application.module() {
                     }
 
                     val requestBytes = call.receive<ByteArray>()
-                    val targetUrl = "$aiServiceUrl/v1/ai/resurface-batch"
-                    val requestId = call.response.headers["X-Request-Id"] ?: UUID.randomUUID().toString()
-                    logger.info("Forwarding /v1/ai/resurface-batch to ai-service: $targetUrl [requestId: $requestId]")
 
-                    try {
-                        val response = httpClient.post(targetUrl) {
-                            header("X-Request-Id", requestId)
-                            if (internalServiceKey.isNotBlank()) {
-                                header("X-Internal-Service-Key", internalServiceKey)
-                            }
-                            contentType(ContentType.Application.Json)
-                            setBody(requestBytes)
-                        }
-
-                        val responseBytes = response.readBytes()
-                        call.respondBytes(
-                            bytes = responseBytes,
-                            contentType = response.contentType() ?: ContentType.Application.Json,
-                            status = response.status
-                        )
-                    } catch (e: Exception) {
-                        logger.error("Failed to forward resurface-batch to ai-service", e)
-                        call.respond(HttpStatusCode.BadGateway, ErrorResponse("BAD_GATEWAY", "ai-service is unreachable: ${e.message}"))
-                    }
+                    forwardToAiService(
+                        call = call,
+                        userId = userId,
+                        quotaType = QuotaType.RESURFACE_BATCH,
+                        path = "/v1/ai/resurface-batch",
+                        requestBytes = requestBytes,
+                        contentType = ContentType.Application.Json
+                    )
                 }
             }
         }
