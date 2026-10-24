@@ -139,3 +139,13 @@
 | Cloud Infrastructure | Docker Compose on AWS EC2 `t3.medium` (demo), `t3.small` (fallback) | ADR 0003 |
 | Service Communication | Contract-first OpenAPI 3.1.0, internal HTTP with `X-Internal-Secret` | ADR 0004 |
 | Data Ownership | Client owns images, OCR, vectors; Backend owns accounts, quotas, audit logs | ADR 0005 |
+
+## Approved AI Pipeline Decisions and Planning Updates (2026-10-24)
+
+These decisions supersede any conflicting earlier wording in this artifact:
+
+- Search phrase "tuần trước" means the rolling window from 14 days before now through 7 days before now, not the previous calendar week. Add fixed-clock tests for the boundaries.
+- When a screenshot hash matches an existing card, ask the user whether to reuse/link to the existing card or save a separate card. Never silently deduplicate or silently create a duplicate.
+- Prefer a versioned JSON decoder and lazy normalization for legacy tags JSON. Use Room migration only if a concrete requirement cannot be met safely without a database schema change.
+- SQLite FTS remains conditional. Implement it only if a controlled, versioned benchmark demonstrates meaningful benefit over semantic-only retrieval without unacceptable latency, reliability, or privacy regressions.
+- These planning updates do not authorize product-code changes. Product-code implementation remains blocked until the user approves the final implementation plan.

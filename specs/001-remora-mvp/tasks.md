@@ -439,3 +439,56 @@ flowchart TD
 - **Batch 2 (User Stories)**:
   - T009, T013, T016, T020, T021, T025 (Unit Tests) can be authored in parallel with foundational components.
   - Backend prompt tuning (`resurfacing_batch_v1.txt`, `card_extraction_v1.txt`) can proceed while Android UI screens are composed.
+
+## Approved AI Pipeline Decisions and Planning Updates (2026-10-24)
+
+These decisions supersede any conflicting earlier wording in this artifact:
+
+- Search phrase "tuần trước" means the rolling window from 14 days before now through 7 days before now, not the previous calendar week. Add fixed-clock tests for the boundaries.
+- When a screenshot hash matches an existing card, ask the user whether to reuse/link to the existing card or save a separate card. Never silently deduplicate or silently create a duplicate.
+- Prefer a versioned JSON decoder and lazy normalization for legacy tags JSON. Use Room migration only if a concrete requirement cannot be met safely without a database schema change.
+- SQLite FTS remains conditional. Implement it only if a controlled, versioned benchmark demonstrates meaningful benefit over semantic-only retrieval without unacceptable latency, reliability, or privacy regressions.
+- These planning updates do not authorize product-code changes. Product-code implementation remains blocked until the user approves the final implementation plan.
+
+## Phase 10: AI Pipeline Quality and Reliability (Approved for Planning; Not Yet Implemented)
+
+These tasks are planning work items. They do not authorize implementation before the user approves the final plan.
+
+- [ ] **T035 [P0] Define baseline and approved-content benchmark**
+  - **Files**: existing Spec Kit research/checklist artifacts; add benchmark fixtures only in an approved test location during implementation.
+  - **Acceptance Criteria**: synthetic or explicitly approved study content with manually reviewed ground truth; baseline metrics for labeling, search, and Resurfacing; slices cover Vietnamese, mixed-language text, formulas, diagrams, low-quality images, ambiguous time, overlapping subjects, and unrelated cards. No private gallery collection by default.
+- [ ] **T036 [P0] Add error-aware Search result contract**
+  - **Files**: SemanticSearchEngine, SearchViewModel, related unit tests.
+  - **Acceptance Criteria**: distinguish successful matches, valid no-match, and recoverable AI/network/validation failures; preserve the existing relevance threshold until benchmark evidence supports a change.
+- [ ] **T037 [P0] Validate vector and embedding persistence boundaries**
+  - **Files**: VectorMath, MemoryCardEntity, embedding parsing/persistence tests.
+  - **Acceptance Criteria**: validate expected dimensions, finite values, non-zero norm, byte length and round-trip encoding; invalid vectors are explicitly rejected and diagnosable.
+- [ ] **T038 [P0] Introduce backward-compatible versioned tags decoding**
+  - **Files**: canonical model, Android DTO/decoder, AI-service schema/parser, data-model and JSON contract artifacts.
+  - **Acceptance Criteria**: old subject/topics JSON remains readable; optional course/chapter/concepts do not get fabricated; malformed JSON is handled explicitly. Do not add Room columns or migration unless proven necessary.
+- [ ] **T039 [P0] Correct temporal semantics for "tuần trước"**
+  - **Files**: TimeResolver and its unit tests.
+  - **Acceptance Criteria**: use the approved rolling 7–14 day window with a fixed clock; cover boundaries and ensure unrelated date expressions retain their defined semantics.
+- [ ] **T040 [P0] Make Resurfacing outcomes and persistence idempotent**
+  - **Files**: Stage2BatchEvaluator, ResurfacingManager, ResurfacingResultEntity/DAO and tests.
+  - **Acceptance Criteria**: distinguish valid empty results from service/validation/persistence errors; validate candidate IDs, duplicate IDs, finite confidence in [0,1], and group/relation compatibility; retries do not create duplicate relationships or notifications. Keep confidence strictly greater than 0.80.
+- [ ] **T041 [P0] Harden retry and HTTP error classification**
+  - **Files**: AiGatewayClient, CardAnalyzeWorker, gateway and AI-service HTTP client/error mapping tests.
+  - **Acceptance Criteria**: bounded retries and backoff; explicit policy for 400, 401, 403, 404, 408, 413, 422, 429, 5xx, timeout and offline; honor valid Retry-After where appropriate; do not log or return raw upstream payloads.
+- [ ] **T042 [P0] Verify privacy boundaries and sensitive logging**
+  - **Files**: PrivacyBoundaryTest and relevant Android/gateway/AI-service tests.
+  - **Acceptance Criteria**: no AI request before explicit Save; Resurfacing transmits no images or OCR; no raw query, user intent, OCR, image bytes or learning content in application/service logs.
+- [ ] **T043 [P0] Add non-destructive persistence and recovery tests**
+  - **Files**: Room schema/migration tests and relevant worker/repository tests.
+  - **Acceptance Criteria**: existing cards and relationships survive any approved migration; analysis success remains DONE when Resurfacing fails; embedding replacement does not discard a valid old vector before a new valid vector is persisted.
+- [ ] **T044 [P1, CONDITIONAL] Evaluate structured label filters and lexical retrieval**
+  - **Files**: benchmark fixtures/results and existing search artifacts; T033 remains conditional.
+  - **Acceptance Criteria**: compare semantic baseline, structured label filters, and FTS/rank-fusion candidates using the same versioned dataset. Implement FTS only when the measured benefit justifies added complexity and no unacceptable regression is observed.
+
+### Execution gates
+
+1. Establish and review baseline before tuning prompts, thresholds, models, or retrieval.
+2. Approve the canonical tags contract before changing Android/AI-service DTOs or JSON schemas.
+3. Verify backward compatibility before any Room schema change.
+4. Review privacy test results before expanding any transmitted fields.
+5. User approval of the final implementation plan is required before any product-code changes.

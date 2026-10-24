@@ -6,6 +6,13 @@
 
 **Status**: Approved
 
+## Approved AI Pipeline Planning Decisions (2026-10-24)
+
+- `tuần trước` means a rolling window from 14 days ago through 7 days ago, not the previous calendar week.
+- When a screenshot hash matches an existing card, ask the user whether to reuse/link the existing card or save a separate card. Never silently deduplicate or silently create a duplicate.
+- Prefer a versioned JSON decoder for legacy `tags_json`; add Room migration only if a requirement cannot be met safely through decoding/lazy normalization.
+- SQLite FTS is conditional and must not be implemented unless a controlled benchmark demonstrates meaningful benefit over semantic-only retrieval without unacceptable latency, reliability, or privacy regressions.
+
 **Input**: User description: "Remora MVP: An Android application that turns study screenshots into a second brain for students. It captures screenshots, understands content, supports natural-language and time-aware search, and proactively resurfaces relevant past knowledge via Memory Resurfacing."
 
 ## Clarifications & Resolution Log
@@ -100,7 +107,7 @@ So that my notes remain private and I can recall my original context later.
 1. **Given** the user opens Remora for the first time, **When** screenshot capture is enabled, **Then** a transparent consent screen explains that images are only sent for AI analysis after tapping Save, and never stored permanently on the server.
 2. **Given** a screenshot action notification, **When** the user taps "Save" and enters an intent note (e.g. "Công thức cần nhớ thi giữa kỳ"), **Then** the note is attached to the card and saved locally.
 3. **Given** an image is captured on the device, **When** the user has NOT tapped Save, **Then** zero network requests are made, and zero image bytes leave the phone.
-4. *(Edge / Failure Case)*: **Given** the user captures an image that is an exact duplicate (identical SHA-256 hash) of an already processed card, **When** the user taps Save, **Then** the system detects the duplicate, links to the existing card, and notifies the student without redundant network or AI consumption.
+4. *(Edge / Failure Case)*: **Given** the user captures an image whose SHA-256 hash matches an existing card, **When** the user taps Save, **Then** the system informs the user that a duplicate exists and asks whether to reuse/link to the existing card or save a separate card. No AI request is made until the user's choice is explicit; the system must not silently discard the new save or silently create a duplicate.
 
 ---
 
@@ -183,6 +190,7 @@ So that I can connect new lessons with prior knowledge, review prerequisites, an
 - **FR-003**: System MUST provide a first-time onboarding consent screen explaining data privacy boundaries before enabling capture.
 - **FR-004**: System MUST allow users to attach an optional textual intent note (`user_intent`) during capture.
 - **FR-005**: System MUST guarantee that zero image data leaves the device unless the user explicitly confirms Save.
+- **FR-026**: When a saved screenshot hash matches an existing card, the system MUST ask the user whether to reuse/link to the existing card or save a separate card; it MUST NOT silently deduplicate or silently create a duplicate.
 
 ### Knowledge Card Management & AI Processing
 - **FR-006**: System MUST create a local knowledge card in `PENDING` state immediately upon user confirmation to save.
@@ -195,7 +203,7 @@ So that I can connect new lessons with prior knowledge, review prerequisites, an
 
 ### Retrieval & Search
 - **FR-013**: System MUST support natural-language semantic search across all saved cards using vector similarity.
-- **FR-014**: System MUST interpret ambiguous Vietnamese time expressions in search queries ("hôm qua", "tuần trước", "hôm bữa") to constrain card creation dates.
+- **FR-014**: System MUST interpret ambiguous Vietnamese time expressions in search queries ("hôm qua", "tuần trước", "hôm bữa") to constrain card creation dates. For `tuần trước`, the approved window is rolling 7–14 days before the current time, not a calendar week.
 - **FR-015**: System MUST reject and filter out search results whose similarity score falls below the relevance threshold, displaying an empty state instead of irrelevant items.
 - **FR-016**: System MUST visually highlight the student's original `user_intent` on search result cards.
 
@@ -238,7 +246,7 @@ So that I can connect new lessons with prior knowledge, review prerequisites, an
 - **SC-002 (Instant Non-Blocking UI):** Tapping Save dismisses the prompt and displays the new card in the gallery as PENDING within **300 milliseconds**.
 - **SC-003 (Card Analysis Latency):** Background card extraction and embedding generation complete within a median latency of **< 4.0 seconds** under standard network conditions.
 - **SC-004 (Retrieval Accuracy):** For the benchmark query *"slide phân phối chuẩn hôm bữa chụp"*, the target Gaussian distribution slide is returned as the **#1 rank result** in a pre-loaded library of 30–50 demo cards.
-- **SC-005 (Fuzzy Time Filter Precision):** Queries containing "hôm qua", "tuần trước", and "hôm bữa" accurately bound the candidate search space to their respective date windows (1 day, 7 days, ~2–3 weeks) with zero date-overflow errors.
+- **SC-005 (Fuzzy Time Filter Precision):** Queries containing "hôm qua", "tuần trước", and "hôm bữa" accurately bound the candidate search space to their respective date windows (1 day, rolling 7–14 days before now, ~2–3 weeks) with zero date-overflow errors.
 - **SC-006 (Resurfacing Precision & Negative Compliance):**
   - For a new card on "Định lý Thales", the system correctly identifies and displays the prerequisite theorem and practice problem with `confidence > 0.80`.
   - For an unrelated English grammar card, the system returns exactly zero surfaced items (`[]`), achieving **100% negative-case precision**.

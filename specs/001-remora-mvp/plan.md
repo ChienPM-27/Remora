@@ -27,7 +27,7 @@ Remora is an Android application that transforms study screenshots into a search
   - Save to local gallery PENDING transition: $\le 300$ milliseconds.
   - Background card extraction & embedding median latency: $< 4.0$ seconds.
   - On-device Top-15 Cosine search: $< 50$ milliseconds.
-- **Constraints**: 24h Hackathon build, feature freeze at **h22**, zero image egress before user taps Save, no secrets in client APK/repo, 1 single LLM batch call for Resurfacing, `confidence > 0.80`.
+- **Constraints**: 24h Hackathon build, feature freeze at **h22**, zero image egress before user taps Save, no secrets in client APK/repo, 1 single LLM batch call for Resurfacing, `confidence > 0.80`. Approved AI pipeline planning decisions (2026-10-24): `tuần trước` is a rolling 7–14 day window; duplicate hashes require asking the user before reuse or separate save; prefer versioned JSON decoding and use Room migration only when necessary; FTS is conditional on benchmark evidence.
 
 ---
 
@@ -247,7 +247,7 @@ To ensure stability during the 24h Hackathon build, tests are partitioned strict
   - Sanitization fallback on missing fields: defaults `subject = "chưa phân loại"`, `content_type = UNKNOWN`.
   - Malformed JSON handling: retains image, transitions to retry or fallback without crashing.
 - **`TimeResolverTest`**:
-  - Vietnamese fuzzy regex matching: "hôm nay", "hôm qua", "tuần trước", "hôm bữa" (~2–3 weeks).
+  - Vietnamese fuzzy regex matching: "hôm nay", "hôm qua", "tuần trước" (rolling 7–14 days before now), "hôm bữa" (~2–3 weeks).
   - Date window bounding and boundary edge conditions.
 - **`ResurfacingGroupingTest`**:
   - Candidate ID integrity check: unknown IDs outside input pool are discarded.
@@ -277,6 +277,16 @@ These behaviors **CANNOT** be reliably validated in automated JVM tests or emula
 | --- | --- | --- | --- |
 | **Background Capture Process Killed by OS** | High | High | 1. Implement Foreground Service with persistent low-priority notification.<br>2. Request "Ignore Battery Optimization" in onboarding.<br>3. WorkManager content URI trigger fallback. |
 | **Gemini API Latency Spike During Demo** | High | Medium | 1. Use `gemini-3.5-flash-lite` primary with fast `gemini-3.5-flash` fallback.<br>2. Pre-seed and cache 30–50 canonical cards so demo search and resurfacing work deterministically from local cache even with slow network.<br>3. Client-side image compression (down to ~300KB) cuts upload time by 80%. |
-| **Gemini Quota Exhaustion (Free Tier Limits)** | High | Medium | 1. Per-user quota guard at Gateway (`DEMO_DAILY_QUOTA = 50`).<br>2. Batch Resurfacing into exactly 1 call (saves ~75% tokens).<br>3. SHA-256 hash dedup skips already analyzed images.<br>4. Prepared backup API key and paid tier option if decided. |
+| **Gemini Quota Exhaustion (Free Tier Limits)** | High | Medium | 1. Per-user quota guard at Gateway (`DEMO_DAILY_QUOTA = 50`).<br>2. Batch Resurfacing into exactly 1 call (saves ~75% tokens).<br>3. SHA-256 duplicate detection asks the user whether to reuse the existing card or save a separate card.<br>4. Prepared backup API key and paid tier option if decided. |
 | **Conference Wi-Fi Network Instability** | High | High | 1. Dedicated 4G/5G mobile hotspot for demo phone and laptop.<br>2. WorkManager offline queue keeps cards `PENDING` without crashing.<br>3. Screen recording video backup prepared after h22 freeze. |
 | **Model ID / API Parameter Deprecation** | High | Low | All model IDs (`gemini-3.5-flash-lite`, `gemini-embedding-2`) and parameters verified live on 2026-10-22 and documented in `docs/decisions.md`. |
+
+## Approved AI Pipeline Decisions and Planning Updates (2026-10-24)
+
+These decisions supersede any conflicting earlier wording in this artifact:
+
+- Search phrase "tuần trước" means the rolling window from 14 days before now through 7 days before now, not the previous calendar week. Add fixed-clock tests for the boundaries.
+- When a screenshot hash matches an existing card, ask the user whether to reuse/link to the existing card or save a separate card. Never silently deduplicate or silently create a duplicate.
+- Prefer a versioned JSON decoder and lazy normalization for legacy tags JSON. Use Room migration only if a concrete requirement cannot be met safely without a database schema change.
+- SQLite FTS remains conditional. Implement it only if a controlled, versioned benchmark demonstrates meaningful benefit over semantic-only retrieval without unacceptable latency, reliability, or privacy regressions.
+- These planning updates do not authorize product-code changes. Product-code implementation remains blocked until the user approves the final implementation plan.
