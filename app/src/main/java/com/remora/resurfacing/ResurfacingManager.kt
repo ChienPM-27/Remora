@@ -43,6 +43,7 @@ class ResurfacingManager(
                 confidence = item.confidence
             )
         }
+        resurfacingResultDao.deleteResultsForCard(newCard.id)
         resurfacingResultDao.insertResults(entities)
         Timber.i("Persisted ${entities.size} resurfaced links for card #${newCard.id}")
 

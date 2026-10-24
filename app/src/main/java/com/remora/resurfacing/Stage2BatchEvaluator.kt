@@ -11,10 +11,10 @@ import com.remora.core.model.resurface.ResurfaceValidator
 import com.remora.core.model.resurface.ResurfacedItem
 import timber.log.Timber
 
-class Stage2BatchEvaluator(
+open class Stage2BatchEvaluator(
     private val client: AiGatewayClient
 ) {
-    suspend fun evaluateBatch(
+    open suspend fun evaluateBatch(
         newCard: MemoryCard,
         candidates: List<MemoryCard>
     ): List<ResurfacedItem> {

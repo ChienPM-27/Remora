@@ -108,7 +108,7 @@ fun RemoraMainScreen(
     }
 
     val cards by galleryViewModel.cards.collectAsState()
-    val roomResurfacedItems by galleryViewModel.resurfacedItems.collectAsState()
+    val resurfacedState by galleryViewModel.resurfacedState.collectAsState()
     val searchQuery by searchViewModel.query.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
     val searchIsSearching by searchViewModel.isSearching.collectAsState()
@@ -290,8 +290,8 @@ fun RemoraMainScreen(
 
                 MainNavigationTab.RESURFACE -> {
                     ResurfacingScreen(
-                        items = roomResurfacedItems,
-                        latestCard = cards.firstOrNull()
+                        items = resurfacedState.items,
+                        latestCard = resurfacedState.sourceCard ?: cards.firstOrNull()
                     )
                 }
 
