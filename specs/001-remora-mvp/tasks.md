@@ -450,40 +450,50 @@ These decisions supersede any conflicting earlier wording in this artifact:
 - SQLite FTS remains conditional. Implement it only if a controlled, versioned benchmark demonstrates meaningful benefit over semantic-only retrieval without unacceptable latency, reliability, or privacy regressions.
 - These planning updates do not authorize product-code changes. Product-code implementation remains blocked until the user approves the final implementation plan.
 
-## Phase 10: AI Pipeline Quality and Reliability (Approved for Planning; Not Yet Implemented)
+## Phase 10: AI Pipeline Quality and Reliability (Implemented 2026-10-24 on branch feat/ai-pipeline-hardening)
 
-These tasks are planning work items. They do not authorize implementation before the user approves the final plan.
+Status key per task: Implemented → Tested → Verified (device/demo) → Accepted. Evidence references are commits on `feat/ai-pipeline-hardening` and test runs recorded in `docs/benchmark/report.md`.
 
-- [ ] **T035 [P0] Define baseline and approved-content benchmark**
+- [ ] **T035 [P0] Define baseline and approved-content benchmark** — **Implemented + Tested (offline channels); live-model channels BLOCKED (no GEMINI_API_KEY in build environment)**
   - **Files**: existing Spec Kit research/checklist artifacts; add benchmark fixtures only in an approved test location during implementation.
   - **Acceptance Criteria**: synthetic or explicitly approved study content with manually reviewed ground truth; baseline metrics for labeling, search, and Resurfacing; slices cover Vietnamese, mixed-language text, formulas, diagrams, low-quality images, ambiguous time, overlapping subjects, and unrelated cards. No private gallery collection by default.
-- [ ] **T036 [P0] Add error-aware Search result contract**
+  - **Evidence**: fixture `app/src/test/resources/benchmark/pipeline_benchmark_v1.json` + harness `PipelineBenchmarkTest` (commit af373e4). Temporal/validation/tags 100%; lexical micro P=0.786 R=1.000; junk gate passed after an evidence-driven coverage fix. Labeling-extraction and Stage-2 LLM quality need a live key — steps and metrics defined in `docs/benchmark/report.md`; not measured, so this task is not complete.
+- [x] **T036 [P0] Add error-aware Search result contract** — **Implemented + Tested**
   - **Files**: SemanticSearchEngine, SearchViewModel, related unit tests.
   - **Acceptance Criteria**: distinguish successful matches, valid no-match, and recoverable AI/network/validation failures; preserve the existing relevance threshold until benchmark evidence supports a change.
-- [ ] **T037 [P0] Validate vector and embedding persistence boundaries**
+  - **Evidence**: `SearchViewModel` now maps empty-results-with-degraded-semantic to `Error` with retry instead of `Empty` (commit 00a0ae2); thresholds unchanged (0.55/0.45); covered by existing search tests + benchmark junk gate.
+- [x] **T037 [P0] Validate vector and embedding persistence boundaries** — **Implemented + Tested**
   - **Files**: VectorMath, MemoryCardEntity, embedding parsing/persistence tests.
   - **Acceptance Criteria**: validate expected dimensions, finite values, non-zero norm, byte length and round-trip encoding; invalid vectors are explicitly rejected and diagnosable.
-- [ ] **T038 [P0] Introduce backward-compatible versioned tags decoding**
+  - **Evidence**: `VectorMath.isValidEmbedding` (dimension 768, finite, non-zero norm), worker rejects invalid vectors before persisting so any previously stored embedding survives (commits 25c091a, 00a0ae2); `VectorMathTest` extended, all pass.
+- [x] **T038 [P0] Introduce backward-compatible versioned tags decoding** — **Implemented + Tested**
   - **Files**: canonical model, Android DTO/decoder, AI-service schema/parser, data-model and JSON contract artifacts.
   - **Acceptance Criteria**: old subject/topics JSON remains readable; optional course/chapter/concepts do not get fabricated; malformed JSON is handled explicitly. Do not add Room columns or migration unless proven necessary.
-- [ ] **T039 [P0] Correct temporal semantics for "tuần trước"**
+  - **Evidence**: `CardTagsCodec` v1/v2 decoder (no fabrication, malformed → defaults), entity uses it, no Room schema change (DB stays v1); `CardTagsCodecTest` 9/9 pass (commit 25c091a). Backend still emits v1 shape; decoder is forward-compatible.
+- [x] **T039 [P0] Correct temporal semantics for "tuần trước"** — **Implemented + Tested (implementation already rolled forward in c857a41; this change-set added fixed-clock boundary tests)**
   - **Files**: TimeResolver and its unit tests.
   - **Acceptance Criteria**: use the approved rolling 7–14 day window with a fixed clock; cover boundaries and ensure unrelated date expressions retain their defined semantics.
-- [ ] **T040 [P0] Make Resurfacing outcomes and persistence idempotent**
+  - **Evidence**: `TimeResolverTest` boundary cases: exact [now−14d, now−7d], inside/outside probes, clock-stability (commit 00a0ae2); benchmark temporal slice 8/8. Known limitation recorded: "hai tuần trước" still matches the "tuần trước" pattern.
+- [x] **T040 [P0] Make Resurfacing outcomes and persistence idempotent** — **Implemented + Tested**
   - **Files**: Stage2BatchEvaluator, ResurfacingManager, ResurfacingResultEntity/DAO and tests.
   - **Acceptance Criteria**: distinguish valid empty results from service/validation/persistence errors; validate candidate IDs, duplicate IDs, finite confidence in [0,1], and group/relation compatibility; retries do not create duplicate relationships or notifications. Keep confidence strictly greater than 0.80.
-- [ ] **T041 [P0] Harden retry and HTTP error classification**
+  - **Evidence**: `ResurfacingManager` returns Result (failure = service error, success(empty) = negative case), caches stored results without a new LLM call, persists via transactional `replaceResultsForCard`; `ResurfaceValidator` adds finite/[0,1] and duplicate-candidate rules (>0.80 strict kept); `ResurfacingManagerTest` 4/4, `ResurfaceModelsTest` extended (commits 25c091a, 00a0ae2).
+- [x] **T041 [P0] Harden retry and HTTP error classification** — **Implemented + Tested**
   - **Files**: AiGatewayClient, CardAnalyzeWorker, gateway and AI-service HTTP client/error mapping tests.
   - **Acceptance Criteria**: bounded retries and backoff; explicit policy for 400, 401, 403, 404, 408, 413, 422, 429, 5xx, timeout and offline; honor valid Retry-After where appropriate; do not log or return raw upstream payloads.
-- [ ] **T042 [P0] Verify privacy boundaries and sensitive logging**
+  - **Evidence**: 413/422 non-retryable (408/429 retryable), MAX_RETRIES=3 with attempt counting; 429 `Retry-After` honored via delayed unique re-enqueue; all enqueues `enqueueUniqueWork` + explicit backoff; gateway forwards `Retry-After`, refunds quota on upstream 429/5xx, adds 45s timeout, generic 502 body; ai-service maps timeouts to 504, returns 400 for invalid Base64, logs status-only upstream errors (commits 00a0ae2, 6a86bde). Tests: `WorkerErrorClassificationTest`, `GatewayTest`, `AiServiceTest` pass.
+- [x] **T042 [P0] Verify privacy boundaries and sensitive logging** — **Implemented + Tested (payload boundaries); device-manual checks still pending**
   - **Files**: PrivacyBoundaryTest and relevant Android/gateway/AI-service tests.
   - **Acceptance Criteria**: no AI request before explicit Save; Resurfacing transmits no images or OCR; no raw query, user intent, OCR, image bytes or learning content in application/service logs.
-- [ ] **T043 [P0] Add non-destructive persistence and recovery tests**
+  - **Evidence**: `PrivacyBoundaryTest.testResurfaceBatchPayloadCarriesNoImagesOrOcrText` captures the real serialized batch request and asserts no OCR text/field, no Base64 blobs; zero-egress-without-auth case kept; ai-service/gateway log redaction implemented (no raw upstream bodies, no e.message in client responses). Remaining manual items: on-device verification that no AI call precedes Save, and visual log inspection on the demo phone.
+- [x] **T043 [P0] Add non-destructive persistence and recovery tests** — **Implemented + Tested (no migration was needed)**
   - **Files**: Room schema/migration tests and relevant worker/repository tests.
   - **Acceptance Criteria**: existing cards and relationships survive any approved migration; analysis success remains DONE when Resurfacing fails; embedding replacement does not discard a valid old vector before a new valid vector is persisted.
-- [ ] **T044 [P1, CONDITIONAL] Evaluate structured label filters and lexical retrieval**
+  - **Evidence**: no schema change shipped (DB v1 unchanged), so no migration test applies; `ResurfacingManagerTest` proves service errors write nothing and persistence replaces instead of appending; worker keeps card DONE when Resurfacing fails and never overwrites a stored embedding with an invalid one (`CardAnalyzeWorker` order: validate → single atomic row update).
+- [x] **T044 [P1, CONDITIONAL] Evaluate structured label filters and lexical retrieval** — **Evaluated; decision: do not implement FTS now**
   - **Files**: benchmark fixtures/results and existing search artifacts; T033 remains conditional.
   - **Acceptance Criteria**: compare semantic baseline, structured label filters, and FTS/rank-fusion candidates using the same versioned dataset. Implement FTS only when the measured benefit justifies added complexity and no unacceptable regression is observed.
+  - **Evidence**: `docs/benchmark/report.md` T044 memo — on-device lexical channel already covers exact-keyword recall on the versioned fixture; FTS adds schema/maintenance cost without measured marginal benefit; revisit conditions defined. Semantic-vs-FTS comparison on real embeddings remains blocked with T035 live channels.
 
 ### Execution gates
 

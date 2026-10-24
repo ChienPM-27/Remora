@@ -51,7 +51,7 @@ CREATE INDEX IF NOT EXISTS `index_memory_card_status` ON `memory_card` (`status`
 | `user_intent` | `TEXT` | `String?` | Optional student note captured at save time. |
 | `title` | `TEXT` | `String` | AI-generated title, maximum 80 characters. Default `""` while pending. |
 | `summary` | `TEXT` | `String` | AI-generated summary (2–4 sentences). Preserves formulas and numbers. |
-| `tags_json` | `TEXT` | `String` | JSON string `{ "subject": String, "topics": List<String> }`. Default subject is `"chưa phân loại"`. |
+| `tags_json` | `TEXT` | `String` | JSON string. v1 (legacy): `{ "subject": String, "topics": List<String> }`. v2 adds optional `"course"`, `"chapter"`, `"concepts": List<String>` and a `"version"` marker; decoder (`CardTagsCodec`) reads both, never fabricates missing levels, and falls back to `"chưa phân loại"` on malformed JSON. |
 | `content_type` | `TEXT` | `ContentType` | Enum string: `THEORY`, `PROBLEM`, `SOLUTION`, `CODE`, `NOTES`, `UNKNOWN`. |
 | `ocr_text` | `TEXT` | `String` | Verbatim text transcribed from image. Never sent to logs. |
 | `embedding` | `BLOB` | `ByteArray?` | Exactly 3,072 bytes (768 Float32 values, little-endian, L2-normalized). |

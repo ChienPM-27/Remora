@@ -244,3 +244,16 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 
 
 
+
+---
+
+## 11. AI Pipeline Hardening — bằng chứng nghiệm thu (2026-10-24, branch `feat/ai-pipeline-hardening`)
+
+* **Tags JSON v2 (T038):** `CardTagsCodec` (core/model) — decoder chịu lỗi theo hình dạng (shape-tolerant): đọc v1 `{subject, topics}` và v2 (`course`/`chapter` tùy chọn, `concepts[]`, khóa `version`), không bịa trường thiếu, JSON lỗi → mặc định `chưa phân loại`; encoder chỉ ghi khóa v2 khi có dữ liệu. Không đổi schema Room (DB giữ v1, không cần migration).
+* **Validate embedding trước khi lưu (T037):** `VectorMath.isValidEmbedding` kiểm dimension 768 + finite + norm > 0; `CardAnalyzeWorker` từ chối vector sai trước khi ghi, hàng cũ (kể cả vector cũ hợp lệ) không bị ghi đè.
+* **"tuần trước" (T039):** giữ cửa sổ lăn `[now−14d, now−7d]`; bổ sung test biên fixed-clock (đúng 14d/7d, trong/ngoài cửa sổ, ổn định theo đồng hồ). Limitation đã ghi nhận: "hai tuần trước" vẫn khớp mẫu "tuần trước".
+* **Search error contract (T036):** rỗng + kênh ngữ nghĩa lỗi → trạng thái `Error` (thử lại được), không còn báo "không có kết quả" khi không thể xác nhận; ngưỡng 0.55/0.45 giữ nguyên (chưa có benchmark sống).
+* **Resurfacing idempotent (T040):** `ResurfacingManager` trả `Result` (lỗi service ≠ ca âm tính); có kết quả lưu rồi thì không gọi LLM lại; persist qua transaction `replaceResultsForCard` (delete+insert); validator thêm finite/[0,1] + bỏ candidate lặp; giữ `confidence > 0.80` strict.
+* **Retry/HTTP (T041):** 413/422 permanent, 408/429/5xx retryable, MAX_RETRIES=3; 429 honor `Retry-After` bằng re-enqueue unique có initialDelay; mọi enqueue là `enqueueUniqueWork` + backoff exponential 30s. Gateway: forward `Retry-After`, hoàn quota khi upstream 429/5xx hoặc lỗi vận chuyển, timeout 45s, body 502 chung chung (không lộ `e.message`). AI-service: timeout → 504, Base64 sai → 400, log chỉ ghi status + mã lỗi upstream (không log raw body).
+* **Benchmark v1 (T035, một phần):** fixture versioned `app/src/test/resources/benchmark/pipeline_v1.json` (24 thẻ tổng hợp + ground truth tay). Kênh offline: temporal 8/8, resurfacing validation 10/10, tags 5/5, lexical micro P=0.786/R=1.000. Junk gate lộ lỗi thật ("công thức nấu ăn" khớp thẻ toán) → siết luật coverage lexical từ ≥1/2 sang ≥2/3 với query ≥3 term (có bằng chứng, R giữ 1.000). Kênh live-model (extraction/embedding/Stage-2 LLM) CHƯA đo được: môi trường không có `GEMINI_API_KEY`; quy trình đo đã ghi trong `docs/benchmark/report.md`.
+* **FTS (T044):** KHÔNG triển khai — kênh lexical on-device đã đạt R=1.0 trên fixture; FTS thêm chi phí schema/migration không có lợi ích đo được. Điều kiện mở lại đã ghi trong report.
