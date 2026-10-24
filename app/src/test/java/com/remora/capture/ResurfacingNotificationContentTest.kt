@@ -270,6 +270,69 @@ class ResurfacingNotificationContentTest {
     }
 
     @Test
+    fun `truncateSafely never strips Vietnamese decomposed diacritics when cutoff lands on accent`() {
+        // "ả" in NFD is 'a' (U+0061) + combining hook above (U+0309)
+        val nfdText = Normalizer.normalize("ả bài học", Normalizer.Form.NFD)
+        assertEquals(2, Normalizer.normalize("ả", Normalizer.Form.NFD).length)
+
+        // When maxLength = 2 and ellipsis = "…", target = 1.
+        // The first character "ả" takes 2 code units, so it does not fit in target = 1.
+        // It must NOT truncate to "a…" (stripping the accent). It should return "…".
+        val resultMax2 = NotificationHelper.truncateSafely(nfdText, maxLength = 2)
+        assertEquals("…", resultMax2)
+
+        // When maxLength = 3 and ellipsis = "…", target = 2.
+        // "ả" fits in 2 code units and normalizes to NFC "ả".
+        val resultMax3 = NotificationHelper.truncateSafely(nfdText, maxLength = 3)
+        assertEquals("ả…", resultMax3)
+    }
+
+    @Test
+    fun `buildResurfacingNotificationContent replaces newlines in titles and reason to keep single-line format`() {
+        val item = ResurfacingAlertItem(
+            group = ResurfaceGroup.SIMILAR,
+            candidateTitle = "Định lý\nFermat",
+            reason = "Phương pháp tìm cực trị.\nCần xem lại công thức.",
+            confidence = 0.95f
+        )
+
+        val content = NotificationHelper.buildResurfacingNotificationContent(
+            sourceCardTitle = "Giải tích 1:\nCực trị hàm số",
+            items = listOf(item)
+        )
+
+        assertEquals("Giải tích 1: Cực trị hàm số", content.title)
+        assertFalse("Title must not contain newline", content.title.contains("\n"))
+
+        assertEquals(1, content.lines.size)
+        val line = content.lines[0]
+        assertFalse("Line must not contain newline", line.contains("\n"))
+        assertTrue(line.contains("Định lý Fermat"))
+        assertTrue(line.contains("Phương pháp tìm cực trị. Cần xem lại công thức."))
+
+        // Total lines in BigText must be exactly 2 (title + 1 item line)
+        val bigTextLines = content.bigText.split("\n")
+        assertEquals(2, bigTextLines.size)
+        assertEquals("Giải tích 1: Cực trị hàm số", bigTextLines[0])
+        assertEquals(line, bigTextLines[1])
+    }
+
+    @Test
+    fun `selectTopAlertItems handles all items belonging to a single group`() {
+        val items = listOf(
+            ResurfacingAlertItem(ResurfaceGroup.SIMILAR, "S1", "Reason 1", confidence = 0.95f),
+            ResurfacingAlertItem(ResurfaceGroup.SIMILAR, "S2", "Reason 2", confidence = 0.91f),
+            ResurfacingAlertItem(ResurfaceGroup.SIMILAR, "S3", "Reason 3", confidence = 0.85f),
+            ResurfacingAlertItem(ResurfaceGroup.SIMILAR, "S4", "Reason 4", confidence = 0.80f)
+        )
+
+        val selected = NotificationHelper.selectTopAlertItems(items, maxLines = 3)
+
+        assertEquals(3, selected.size)
+        assertEquals(listOf("S1", "S2", "S3"), selected.map { it.candidateTitle })
+    }
+
+    @Test
     fun `notification intent constants and request codes are well-configured`() {
         assertEquals("extra_open_resurfacing", NotificationHelper.EXTRA_OPEN_RESURFACING)
         assertEquals("extra_new_card_id", NotificationHelper.EXTRA_NEW_CARD_ID)

@@ -202,6 +202,8 @@ class MainActivity : ComponentActivity() {
             Timber.i("MainActivity received intent with capture uri: $uri")
             initialCaptureUri = uri
             CaptureEventManager.emitScreenshot(uri)
+            intent.removeExtra(NotificationHelper.EXTRA_IMAGE_URI)
+            intent.removeExtra(NotificationHelper.EXTRA_OPEN_SAVE_SHEET)
         }
     }
 
@@ -210,6 +212,8 @@ class MainActivity : ComponentActivity() {
             val newCardId = intent.getLongExtra(NotificationHelper.EXTRA_NEW_CARD_ID, -1L)
             Timber.i("MainActivity received intent to open resurfacing tab for card #$newCardId")
             initialTab = MainNavigationTab.RESURFACE
+            intent.removeExtra(NotificationHelper.EXTRA_OPEN_RESURFACING)
+            intent.removeExtra(NotificationHelper.EXTRA_NEW_CARD_ID)
         }
     }
 }

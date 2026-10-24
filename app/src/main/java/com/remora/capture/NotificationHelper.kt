@@ -14,6 +14,7 @@ import com.remora.MainActivity
 import com.remora.core.model.entity.ResurfaceGroup
 import com.remora.core.model.resurface.ResurfacedItem
 import java.text.BreakIterator
+import java.text.Normalizer
 import java.util.Locale
 import timber.log.Timber
 
@@ -146,6 +147,7 @@ object NotificationHelper {
     /**
      * Truncates text safely up to [maxLength] characters without splitting
      * Vietnamese combined diacritics or UTF-16 surrogate pairs (e.g. emojis).
+     * Normalizes output to NFC to guarantee canonical composition of Vietnamese characters.
      * Appends [ellipsis] if truncated.
      */
     fun truncateSafely(text: String, maxLength: Int = 80, ellipsis: String = "…"): String {
@@ -162,7 +164,7 @@ object NotificationHelper {
 
         var end = iterator.preceding(target + 1)
         if (end == BreakIterator.DONE || end <= 0) {
-            end = target
+            end = 0
         }
 
         // Never split surrogate pairs (e.g. emoji or astral unicode)
@@ -172,20 +174,8 @@ object NotificationHelper {
             }
         }
 
-        // Never split combining marks/diacritics (e.g. decomposed Vietnamese accents)
-        while (end > 0) {
-            val type = Character.getType(text[end - 1])
-            if (type == Character.NON_SPACING_MARK.toInt() ||
-                type == Character.COMBINING_SPACING_MARK.toInt() ||
-                type == Character.ENCLOSING_MARK.toInt()
-            ) {
-                end--
-            } else {
-                break
-            }
-        }
-
-        val trimmed = text.substring(0, end).trimEnd()
+        val rawTrimmed = text.substring(0, end).trimEnd()
+        val trimmed = Normalizer.normalize(rawTrimmed, Normalizer.Form.NFC)
         return if (trimmed.isEmpty()) ellipsis.take(maxLength) else "$trimmed$ellipsis"
     }
 
@@ -231,13 +221,15 @@ object NotificationHelper {
      * Pure function building display lines and BigTextStyle text for resurfacing notifications:
      * - First line is the source card title.
      * - Body contains at most [maxLines] lines formatted as "nhóm · tiêu đề — lý do (cắt ~80 ký tự)".
+     * Replaces any internal newlines in titles and reason with spaces to guarantee single-line body layout.
      */
     fun buildResurfacingNotificationContent(
         sourceCardTitle: String,
         items: List<ResurfacingAlertItem>,
         maxLines: Int = 3
     ): ResurfacingNotificationContent {
-        val cleanSourceTitle = sourceCardTitle.trim().ifBlank { "Bài học vừa lưu" }
+        val sanitizedSourceTitle = sourceCardTitle.replace(Regex("[\\r\\n]+"), " ").trim()
+        val cleanSourceTitle = truncateSafely(sanitizedSourceTitle, 80).ifBlank { "Bài học vừa lưu" }
         val selectedItems = selectTopAlertItems(items, maxLines)
 
         val lines = selectedItems.map { item ->
@@ -246,8 +238,10 @@ object NotificationHelper {
                 ResurfaceGroup.COMPLEMENTARY -> "bổ trợ"
                 ResurfaceGroup.ACTIONABLE -> "có giá trị sử dụng"
             }
-            val candidateTitle = item.candidateTitle.trim().ifBlank { "Thẻ liên quan" }
-            val trimmedReason = truncateSafely(item.reason.trim(), 80)
+            val sanitizedCandidateTitle = item.candidateTitle.replace(Regex("[\\r\\n]+"), " ").trim()
+            val candidateTitle = truncateSafely(sanitizedCandidateTitle, 80).ifBlank { "Thẻ liên quan" }
+            val sanitizedReason = item.reason.replace(Regex("[\\r\\n]+"), " ").trim()
+            val trimmedReason = truncateSafely(sanitizedReason, 80)
             if (trimmedReason.isNotBlank()) {
                 "$groupLabel · $candidateTitle — $trimmedReason"
             } else {
