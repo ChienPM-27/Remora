@@ -16,8 +16,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
@@ -25,41 +23,82 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.remora.data.local.RemoraDatabase
+import com.remora.data.local.entity.AppSettingEntity
 import com.remora.ui.theme.RemoraBg
 import com.remora.ui.theme.RemoraBlue
 import com.remora.ui.theme.RemoraBlueSoft
 import com.remora.ui.theme.RemoraBorder
 import com.remora.ui.theme.RemoraNavyDark
 import com.remora.ui.theme.RemoraSubtleText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
+@Composable
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onClearAllCards: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val setting by viewModel.setting.collectAsState()
+    SettingsScreenContent(
+        setting = setting,
+        onAutoDetectChanged = viewModel::setAutoDetectEnabled,
+        onNotificationsChanged = viewModel::setNotificationsEnabled,
+        onClearAllCards = onClearAllCards,
+        modifier = modifier
+    )
+}
 
 @Composable
 fun SettingsScreen(
     onClearAllCards: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val viewModel = remember(context) {
+        SettingsViewModel(RemoraDatabase.getInstance(context).appSettingDao())
+    }
+    SettingsScreen(
+        viewModel = viewModel,
+        onClearAllCards = onClearAllCards,
+        modifier = modifier
+    )
+}
+
+@Composable
+fun SettingsScreenContent(
+    setting: AppSettingEntity?,
+    onAutoDetectChanged: (Boolean) -> Unit,
+    onNotificationsChanged: (Boolean) -> Unit,
+    onClearAllCards: () -> Unit,
+    modifier: Modifier = Modifier,
+    nowMs: Long = System.currentTimeMillis()
+) {
     val scope = rememberCoroutineScope()
-    var autoDetectEnabled by remember { mutableStateOf(true) }
-    var notificationEnabled by remember { mutableStateOf(true) }
     var showConfirmClearDialog by remember { mutableStateOf(false) }
+
+    val autoDetectActive = isAutoDetectEnabled(setting, nowMs)
+    val autoDetectSubtitle = formatAutoDetectStatusSubtitle(setting, nowMs)
+    val notificationsActive = setting?.notificationsEnabled ?: true
 
     Column(
         modifier = modifier
@@ -111,14 +150,14 @@ fun SettingsScreen(
                             color = RemoraNavyDark
                         )
                         Text(
-                            text = "bật cửa sổ lưu bài học khi bạn chụp màn hình",
+                            text = autoDetectSubtitle,
                             fontSize = 12.sp,
                             color = RemoraSubtleText
                         )
                     }
                     Switch(
-                        checked = autoDetectEnabled,
-                        onCheckedChange = { autoDetectEnabled = it },
+                        checked = autoDetectActive,
+                        onCheckedChange = onAutoDetectChanged,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = RemoraNavyDark
@@ -148,8 +187,8 @@ fun SettingsScreen(
                         )
                     }
                     Switch(
-                        checked = notificationEnabled,
-                        onCheckedChange = { notificationEnabled = it },
+                        checked = notificationsActive,
+                        onCheckedChange = onNotificationsChanged,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = Color.White,
                             checkedTrackColor = RemoraNavyDark
@@ -253,14 +292,14 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "cam kết quyền riêng tư tuyệt đối",
+                        text = "cam kết quyền riêng tư",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = RemoraNavyDark
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "ảnh chỉ rời khỏi thiết bị khi bạn bấm 'lưu vào remora'. không có hình ảnh hoặc văn bản ocr nào bị đồng bộ âm thầm trong nền.",
+                        text = "ảnh đã nén và ghi chú chỉ gửi lên khi bạn bấm 'lưu vào remora'. khi phân tích gợi nhớ, tóm tắt, tag và ghi chú của tối đa 15 thẻ liên quan được gửi. câu tìm kiếm được gửi để tạo embedding. remora không đồng bộ âm thầm trong nền.",
                         fontSize = 12.sp,
                         color = RemoraSubtleText,
                         lineHeight = 16.sp

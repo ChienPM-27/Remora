@@ -67,6 +67,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
+import com.remora.ui.settings.SettingsViewModel
+
 enum class MainNavigationTab {
     TIMELINE,
     SEARCH,
@@ -78,6 +80,10 @@ enum class MainNavigationTab {
 fun RemoraMainScreen(
     galleryViewModel: GalleryViewModel,
     searchViewModel: SearchViewModel,
+    settingsViewModel: SettingsViewModel = run {
+        val context = LocalContext.current
+        remember(context) { SettingsViewModel(RemoraDatabase.getInstance(context).appSettingDao()) }
+    },
     initialCaptureUri: Uri? = null,
     modifier: Modifier = Modifier
 ) {
@@ -291,6 +297,7 @@ fun RemoraMainScreen(
 
                 MainNavigationTab.SETTINGS -> {
                     SettingsScreen(
+                        viewModel = settingsViewModel,
                         onClearAllCards = {
                             scope.launch(Dispatchers.IO) {
                                 val db = RemoraDatabase.getInstance(context)

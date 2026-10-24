@@ -31,6 +31,7 @@ import com.remora.ui.consent.ConsentScreen
 import com.remora.ui.consent.ConsentViewModel
 import com.remora.ui.gallery.GalleryViewModel
 import com.remora.ui.search.SearchViewModel
+import com.remora.ui.settings.SettingsViewModel
 import com.remora.ui.theme.RemoraTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -147,6 +148,7 @@ class MainActivity : ComponentActivity() {
             memoryCardDao = db.memoryCardDao()
         )
         val searchViewModel = SearchViewModel(searchEngine)
+        val settingsViewModel = SettingsViewModel(db.appSettingDao())
 
         setContent {
             RemoraTheme {
@@ -172,6 +174,7 @@ class MainActivity : ComponentActivity() {
                         RemoraMainScreen(
                             galleryViewModel = galleryViewModel,
                             searchViewModel = searchViewModel,
+                            settingsViewModel = settingsViewModel,
                             initialCaptureUri = initialCaptureUri
                         )
                     }
