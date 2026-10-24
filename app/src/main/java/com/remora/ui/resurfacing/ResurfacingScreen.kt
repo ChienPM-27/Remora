@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -65,6 +67,7 @@ data class ResurfacingDisplayGroup(
 enum class ResurfacingEmptyReason {
     NO_CARDS,
     LATEST_PENDING,
+    LATEST_FAILED,
     NO_CONFIDENT_LINKS
 }
 
@@ -150,11 +153,16 @@ fun resolveResurfacingUiState(
     )
 
     if (isLatestNewerThanSource) {
+        val emptyReason = if (latestCard.status == ProcessingStatus.FAILED) {
+            ResurfacingEmptyReason.LATEST_FAILED
+        } else {
+            ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+        }
         return ResurfacingUiState(
             headerCard = latestCard,
             headerTitle = resolveCardTitle(latestCard, "Bài học vừa lưu"),
             items = emptyList(),
-            emptyReason = ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+            emptyReason = emptyReason
         )
     }
 
@@ -169,11 +177,16 @@ fun resolveResurfacingUiState(
                 emptyReason = null
             )
         } else {
+            val emptyReason = if (effectiveSourceCard.status == ProcessingStatus.FAILED) {
+                ResurfacingEmptyReason.LATEST_FAILED
+            } else {
+                ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+            }
             ResurfacingUiState(
                 headerCard = effectiveSourceCard,
                 headerTitle = title,
                 items = emptyList(),
-                emptyReason = ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+                emptyReason = emptyReason
             )
         }
     }
@@ -185,11 +198,17 @@ fun resolveResurfacingUiState(
         "Bài học vừa lưu"
     }
 
+    val emptyReason = if (latestCard?.status == ProcessingStatus.FAILED) {
+        ResurfacingEmptyReason.LATEST_FAILED
+    } else {
+        ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+    }
+
     return ResurfacingUiState(
         headerCard = latestCard,
         headerTitle = title,
         items = emptyList(),
-        emptyReason = ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+        emptyReason = emptyReason
     )
 }
 
@@ -253,6 +272,7 @@ fun ResurfacingScreen(
         val subtitleText = when (uiState.emptyReason) {
             ResurfacingEmptyReason.NO_CARDS -> "chưa có ký ức nào"
             ResurfacingEmptyReason.LATEST_PENDING -> "đang phân tích liên kết tri thức..."
+            ResurfacingEmptyReason.LATEST_FAILED -> "không thể phân tích bài học"
             ResurfacingEmptyReason.NO_CONFIDENT_LINKS -> "0 ký ức cũ liên quan tới nó"
             null -> "${uiState.items.size} ký ức cũ liên quan tới nó"
         }
@@ -405,6 +425,30 @@ private fun ResurfacingEmptyState(
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "remora đang đọc nội dung ảnh và đối chiếu với kho tri thức của bạn...",
+                        fontSize = 14.sp,
+                        color = RemoraSubtleText,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+                }
+
+                ResurfacingEmptyReason.LATEST_FAILED -> {
+                    Icon(
+                        imageVector = Icons.Outlined.ErrorOutline,
+                        contentDescription = null,
+                        tint = Color(0xFFD32F2F),
+                        modifier = Modifier.size(44.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "xử lý bài học chưa thành công",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = RemoraNavyDark
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "bài học này gặp lỗi trong quá trình phân tích. bạn có thể bấm thử lại ở màn hình dòng thời gian.",
                         fontSize = 14.sp,
                         color = RemoraSubtleText,
                         textAlign = TextAlign.Center,

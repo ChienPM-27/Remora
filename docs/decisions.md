@@ -318,3 +318,20 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 
 
 
+
+
+---
+
+## 14. Tinh chỉnh Cuối cùng & Hoàn thiện Luồng Trải nghiệm (2026-10-24)
+
+* **Điều hướng Thẻ nguồn từ Notification (`newCardId`):**
+  - Chạm vào notification gợi nhớ truyền `EXTRA_NEW_CARD_ID` vào `MainActivity`, kích hoạt `galleryViewModel.selectSourceCard(newCardId)`. Tab Gợi nhớ mở chính xác bộ kết quả của thẻ tương ứng trong notification. Khi vào tab bình thường (hoặc `cardId = null`), tab tự động theo dõi bộ kết quả của thẻ nguồn mới nhất.
+* **Xử lý Triệt để Hiện tượng Nháy Giao diện (Flicker) & Trạng thái Thẻ FAILED:**
+  - Trong `CardAnalyzeWorker`, chạy pipeline gợi nhớ và lưu kết quả trước khi cập nhật thẻ sang `DONE`. Điều này triệt tiêu hoàn toàn khoảng thời gian trễ khiến giao diện hiển thị nhầm "0 ký ức liên quan" trước khi có kết quả.
+  - Bổ sung trạng thái `LATEST_FAILED` trong `ResurfacingEmptyReason`: phân biệt rõ ranh giới giữa thẻ gặp lỗi phân tích (hiện icon lỗi và hướng dẫn thử lại) với trường hợp thẻ phân tích thành công nhưng không có liên kết đạt ngưỡng 80% (`NO_CONFIDENT_LINKS`).
+* **Ticker Tự động Cập nhật Màn hình Cài đặt khi Hết hạn Tắt 1 Giờ:**
+  - `SettingsScreenContent` sử dụng `produceState` với `delay(pauseUntil - now + 50L)`. Đúng thời điểm `pause_until` hết hạn, State tự động kích hoạt recompose, gạt switch sang BẬT và chuyển phụ đề về mặc định mà không cần người dùng thao tác hay pull-to-refresh.
+* **Ghi nhận Dependency `room-testing:2.6.1`:**
+  - Khai báo `androidx.room:room-testing:2.6.1` chỉ trong phạm vi `androidTestImplementation` để phục vụ `MigrationTestHelper` kiểm thử migration Room SQLite 1->2. Không làm tăng kích thước hay ảnh hưởng runtime của APK release.
+* **Rút gọn Kiến trúc `applyCaptureAction`:**
+  - Rút gọn việc bọc 3 lớp về một hàm duy nhất `CapturePolicy.applyCaptureAction(action, dao, nowMs)`, được gọi trực tiếp bởi `CaptureActionReceiver`, `RemoraMainScreen` và các unit test.

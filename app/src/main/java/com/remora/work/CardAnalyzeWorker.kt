@@ -94,10 +94,8 @@ class CardAnalyzeWorker(
                 errorCode = null
             )
 
-            db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
-            Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
-
-            // 6. Trigger Resurfacing pipeline and save results to Room
+            // 6. Trigger Resurfacing pipeline and save results to Room before marking card as DONE
+            // This guarantees resurfacing results are already persisted when observers see card transition to DONE, eliminating UI flicker.
             val resurfacingManager = remoraApp?.container?.resurfacingManager
             if (resurfacingManager != null && updatedCard.embedding != null) {
                 try {
@@ -117,6 +115,9 @@ class CardAnalyzeWorker(
                     Timber.w(resurfaceEx, "Resurfacing pipeline failed silently without breaking card DONE status")
                 }
             }
+
+            db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
+            Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
 
             return Result.success()
 

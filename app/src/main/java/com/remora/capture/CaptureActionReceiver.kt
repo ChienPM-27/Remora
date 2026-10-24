@@ -69,7 +69,7 @@ class CaptureActionReceiver : BroadcastReceiver() {
                         NotificationHelper.ACTION_MUTE_1H,
                         NotificationHelper.ACTION_PAUSE -> {
                             val db = RemoraDatabase.getInstance(context)
-                            applyCaptureAction(action, db.appSettingDao(), System.currentTimeMillis())
+                            CapturePolicy.applyCaptureAction(action, db.appSettingDao(), System.currentTimeMillis())
                             Timber.i("Screenshot capture action applied: $action")
                         }
                     }
@@ -80,10 +80,5 @@ class CaptureActionReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }
-    }
-
-    companion object {
-        suspend fun applyCaptureAction(action: String, dao: com.remora.data.local.dao.AppSettingDao, nowMs: Long): Boolean =
-            com.remora.capture.applyCaptureAction(action, dao, nowMs)
     }
 }

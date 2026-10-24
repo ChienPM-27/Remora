@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
 
     private var initialCaptureUri by mutableStateOf<Uri?>(null)
     private var initialTab by mutableStateOf(MainNavigationTab.TIMELINE)
+    private var resurfacingLaunchTargetCardId by mutableStateOf<Long?>(null)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -158,6 +159,13 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val hasConsented by consentViewModel.hasConsented.collectAsState()
 
+                    // Side-effect: When notification opens a specific card, focus that card's resurfacing results
+                    LaunchedEffect(resurfacingLaunchTargetCardId) {
+                        resurfacingLaunchTargetCardId?.let { targetCardId ->
+                            galleryViewModel.selectSourceCard(targetCardId)
+                        }
+                    }
+
                     // Side-effect: Only start service outside composition when consented
                     LaunchedEffect(hasConsented) {
                         if (hasConsented) {
@@ -212,6 +220,9 @@ class MainActivity : ComponentActivity() {
             val newCardId = intent.getLongExtra(NotificationHelper.EXTRA_NEW_CARD_ID, -1L)
             Timber.i("MainActivity received intent to open resurfacing tab for card #$newCardId")
             initialTab = MainNavigationTab.RESURFACE
+            if (newCardId > 0L) {
+                resurfacingLaunchTargetCardId = newCardId
+            }
             intent.removeExtra(NotificationHelper.EXTRA_OPEN_RESURFACING)
             intent.removeExtra(NotificationHelper.EXTRA_NEW_CARD_ID)
         }

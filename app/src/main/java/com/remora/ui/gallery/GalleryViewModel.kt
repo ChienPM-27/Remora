@@ -35,6 +35,16 @@ class GalleryViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
+    private val selectedSourceCardId = kotlinx.coroutines.flow.MutableStateFlow<Long?>(null)
+
+    /**
+     * Explicitly focuses the Resurfacing tab on a specific source card ID (e.g. from notification intent).
+     * Pass null to follow the latest source card automatically.
+     */
+    fun selectSourceCard(cardId: Long?) {
+        selectedSourceCardId.value = cardId
+    }
+
     val cards: StateFlow<List<MemoryCard>> = repository.getAllCards()
         .stateIn(
             scope = viewModelScope,
@@ -43,16 +53,23 @@ class GalleryViewModel(
         )
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val resurfacedState: StateFlow<ResurfacedState> = resurfacingResultDao.getLatestSourceCardIdFlow()
-        .flatMapLatest { latestSourceCardId ->
-            if (latestSourceCardId == null) {
+    val resurfacedState: StateFlow<ResurfacedState> = selectedSourceCardId
+        .flatMapLatest { explicitId ->
+            if (explicitId != null && explicitId > 0L) {
+                flowOf(explicitId)
+            } else {
+                resurfacingResultDao.getLatestSourceCardIdFlow()
+            }
+        }
+        .flatMapLatest { sourceCardId ->
+            if (sourceCardId == null) {
                 flowOf(ResurfacedState())
             } else {
-                resurfacingResultDao.getResultsForCardFlow(latestSourceCardId).map { entities ->
+                resurfacingResultDao.getResultsForCardFlow(sourceCardId).map { entities ->
                     val sourceCard = try {
-                        memoryCardDao.getCardById(latestSourceCardId)?.toDomainModel()
+                        memoryCardDao.getCardById(sourceCardId)?.toDomainModel()
                     } catch (e: Exception) {
-                        Timber.w(e, "Failed to load source card #$latestSourceCardId")
+                        Timber.w(e, "Failed to load source card #$sourceCardId")
                         null
                     }
 

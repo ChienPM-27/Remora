@@ -108,7 +108,7 @@ class CapturePolicyTest {
         )
         val fixedNow = 1_700_000_000_000L
 
-        val result = applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
+        val result = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
 
         assertTrue(result)
         assertEquals(fixedNow + 3_600_000L, fakeDao.setting?.pauseUntil)
@@ -120,7 +120,7 @@ class CapturePolicyTest {
         val fakeDao = FakeAppSettingDao(setting = null)
         val fixedNow = 1_700_000_000_000L
 
-        val result = applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
+        val result = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
 
         assertTrue(result)
         assertEquals(fixedNow + 3_600_000L, fakeDao.setting?.pauseUntil)
@@ -134,7 +134,7 @@ class CapturePolicyTest {
         )
         val fixedNow = 1_700_000_000_000L
 
-        val result = applyCaptureAction(NotificationHelper.ACTION_PAUSE, fakeDao, fixedNow)
+        val result = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_PAUSE, fakeDao, fixedNow)
 
         assertTrue(result)
         assertTrue(fakeDao.setting?.paused ?: false)
@@ -146,7 +146,7 @@ class CapturePolicyTest {
         val fakeDao = FakeAppSettingDao(setting = null)
         val fixedNow = 1_700_000_000_000L
 
-        val result = applyCaptureAction(NotificationHelper.ACTION_PAUSE, fakeDao, fixedNow)
+        val result = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_PAUSE, fakeDao, fixedNow)
 
         assertTrue(result)
         assertTrue(fakeDao.setting?.paused ?: false)
@@ -159,12 +159,12 @@ class CapturePolicyTest {
         )
         val fixedNow = 1_700_000_000_000L
 
-        val skipResult = applyCaptureAction(NotificationHelper.ACTION_SKIP, fakeDao, fixedNow)
+        val skipResult = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_SKIP, fakeDao, fixedNow)
         assertFalse(skipResult)
         assertEquals(1234L, fakeDao.setting?.pauseUntil)
         assertFalse(fakeDao.setting?.paused ?: true)
 
-        val unknownResult = applyCaptureAction("UNKNOWN_ACTION", fakeDao, fixedNow)
+        val unknownResult = CapturePolicy.applyCaptureAction("UNKNOWN_ACTION", fakeDao, fixedNow)
         assertFalse(unknownResult)
         assertEquals(1234L, fakeDao.setting?.pauseUntil)
         assertFalse(fakeDao.setting?.paused ?: true)
@@ -177,7 +177,7 @@ class CapturePolicyTest {
         )
         val fixedNow = 1_700_000_000_000L
 
-        val result = applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
+        val result = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
 
         assertTrue(result)
         // Must clear paused to false so capture resumes after 1 hour!
@@ -200,7 +200,7 @@ class CapturePolicyTest {
         )
         val fixedNow = 1_700_000_000_000L
 
-        val result = applyCaptureAction(NotificationHelper.ACTION_PAUSE, fakeDao, fixedNow)
+        val result = CapturePolicy.applyCaptureAction(NotificationHelper.ACTION_PAUSE, fakeDao, fixedNow)
 
         assertTrue(result)
         assertTrue(fakeDao.setting?.paused ?: false)
@@ -212,19 +212,5 @@ class CapturePolicyTest {
 
         // Indefinite pause is always suppressed
         assertTrue(CapturePolicy.isCaptureSuppressed(fakeDao.setting, fixedNow + 10_000_000L))
-    }
-
-    @Test
-    fun captureActionReceiver_applyCaptureAction_delegatesSuccessfully() = runTest {
-        val fakeDao = FakeAppSettingDao(
-            setting = AppSettingEntity(paused = true, pauseUntil = 0L)
-        )
-        val fixedNow = 5_000_000L
-
-        val result = CaptureActionReceiver.applyCaptureAction(NotificationHelper.ACTION_MUTE_1H, fakeDao, fixedNow)
-
-        assertTrue(result)
-        assertEquals(5_000_000L + ONE_HOUR_MS, fakeDao.setting?.pauseUntil)
-        assertFalse(fakeDao.setting?.paused ?: true)
     }
 }

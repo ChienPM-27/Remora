@@ -49,6 +49,3 @@ object CapturePolicy {
         }
     }
 }
-
-suspend fun applyCaptureAction(action: String, dao: AppSettingDao, nowMs: Long): Boolean =
-    CapturePolicy.applyCaptureAction(action, dao, nowMs)

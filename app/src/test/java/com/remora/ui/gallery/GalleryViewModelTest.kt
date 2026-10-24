@@ -395,4 +395,88 @@ class GalleryViewModelTest {
         assertEquals(listOf(77L), deletedCardIds)
         assertEquals(77L, deletedFromResurfacingId)
     }
+
+    @Test
+    fun testSelectSourceCardOverridesLatestSourceCardIdFlow() = runTest {
+        val latestSourceIdFlow = MutableStateFlow<Long?>(10L)
+        val resultsMap = mutableMapOf<Long, List<ResurfacingResultEntity>>()
+        resultsMap[10L] = listOf(
+            ResurfacingResultEntity(
+                newCardId = 10L,
+                candidateCardId = 101L,
+                group = "SIMILAR",
+                relation = "DUPLICATE",
+                confidence = 0.85f
+            )
+        )
+        resultsMap[50L] = listOf(
+            ResurfacingResultEntity(
+                newCardId = 50L,
+                candidateCardId = 202L,
+                group = "ACTIONABLE",
+                relation = "SUPPLEMENT",
+                confidence = 0.95f
+            )
+        )
+
+        val cardsMap = mutableMapOf<Long, MemoryCardEntity>()
+        cardsMap[10L] = MemoryCardEntity(id = 10L, imageUri = "uri10", title = "Source 10", createdAt = 1000L)
+        cardsMap[50L] = MemoryCardEntity(id = 50L, imageUri = "uri50", title = "Source 50", createdAt = 5000L)
+        cardsMap[101L] = MemoryCardEntity(id = 101L, imageUri = "uri101", title = "Candidate 101", createdAt = 500L)
+        cardsMap[202L] = MemoryCardEntity(id = 202L, imageUri = "uri202", title = "Candidate 202", createdAt = 600L)
+
+        val reactiveResurfaceDao = object : ResurfacingResultDao {
+            override fun getResultsForCardFlow(newCardId: Long): Flow<List<ResurfacingResultEntity>> =
+                flowOf(resultsMap[newCardId] ?: emptyList())
+            override fun getLatestSourceCardIdFlow(): Flow<Long?> = latestSourceIdFlow
+            override suspend fun getLatestSourceCardId(): Long? = latestSourceIdFlow.value
+            override fun getRecentResultsFlow(): Flow<List<ResurfacingResultEntity>> = flowOf(emptyList())
+            override suspend fun insertResults(results: List<ResurfacingResultEntity>) {}
+            override suspend fun getResultsForCard(newCardId: Long): List<ResurfacingResultEntity> =
+                resultsMap[newCardId] ?: emptyList()
+            override suspend fun deleteResultsForCard(newCardId: Long) {}
+            override suspend fun deleteAllResults() {}
+        }
+
+        val reactiveCardDao = object : MemoryCardDao {
+            override suspend fun insertCard(card: MemoryCardEntity): Long = card.id
+            override suspend fun updateCard(card: MemoryCardEntity) {}
+            override suspend fun deleteCard(id: Long) {}
+            override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
+            override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
+            override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
+            override suspend fun getDoneCardsInTimeRange(startTime: Long, endTime: Long): List<MemoryCardEntity> = emptyList()
+            override suspend fun getCardCount(): Int = 0
+            override suspend fun getDoneCardCount(): Int = 0
+            override suspend fun deleteAllCards() {}
+        }
+
+        val viewModel = GalleryViewModel(fakeRepo, reactiveResurfaceDao, reactiveCardDao, testDispatcher)
+
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.resurfacedState.collect {}
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Initially follows latestSourceCardIdFlow (10L)
+        assertEquals(10L, viewModel.resurfacedState.value.sourceCard?.id)
+        assertEquals(1, viewModel.resurfacedState.value.items.size)
+        assertEquals(101L, viewModel.resurfacedState.value.items[0].candidateCard.id)
+
+        // Explicitly select 50L (e.g. from notification deep link)
+        viewModel.selectSourceCard(50L)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(50L, viewModel.resurfacedState.value.sourceCard?.id)
+        assertEquals(1, viewModel.resurfacedState.value.items.size)
+        assertEquals(202L, viewModel.resurfacedState.value.items[0].candidateCard.id)
+
+        // Reset explicit selection (pass null) -> falls back to latestSourceIdFlow
+        viewModel.selectSourceCard(null)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(10L, viewModel.resurfacedState.value.sourceCard?.id)
+        assertEquals(101L, viewModel.resurfacedState.value.items[0].candidateCard.id)
+    }
 }

@@ -28,12 +28,14 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -91,13 +93,31 @@ fun SettingsScreenContent(
     onNotificationsChanged: (Boolean) -> Unit,
     onClearAllCards: () -> Unit,
     modifier: Modifier = Modifier,
-    nowMs: Long = System.currentTimeMillis()
+    nowMs: Long? = null
 ) {
     val scope = rememberCoroutineScope()
     var showConfirmClearDialog by remember { mutableStateOf(false) }
 
-    val autoDetectActive = isAutoDetectEnabled(setting, nowMs)
-    val autoDetectSubtitle = formatAutoDetectStatusSubtitle(setting, nowMs)
+    val pauseUntil = setting?.pauseUntil ?: 0L
+    var effectiveNowMs by remember(pauseUntil, nowMs) {
+        mutableStateOf(nowMs ?: System.currentTimeMillis())
+    }
+
+    LaunchedEffect(pauseUntil, nowMs) {
+        if (nowMs != null) {
+            effectiveNowMs = nowMs
+        } else {
+            val currentNow = System.currentTimeMillis()
+            effectiveNowMs = currentNow
+            if (pauseUntil > currentNow) {
+                delay(pauseUntil - currentNow + 50L)
+                effectiveNowMs = System.currentTimeMillis()
+            }
+        }
+    }
+
+    val autoDetectActive = isAutoDetectEnabled(setting, effectiveNowMs)
+    val autoDetectSubtitle = formatAutoDetectStatusSubtitle(setting, effectiveNowMs)
     val notificationsActive = setting?.notificationsEnabled ?: true
 
     Column(
@@ -299,7 +319,7 @@ fun SettingsScreenContent(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "ảnh đã nén và ghi chú chỉ gửi lên khi bạn bấm 'lưu vào remora'. khi phân tích gợi nhớ, tóm tắt, tag và ghi chú của tối đa 15 thẻ liên quan được gửi. câu tìm kiếm được gửi để tạo embedding. remora không đồng bộ âm thầm trong nền.",
+                        text = "ảnh đã nén và ghi chú chỉ gửi lên khi bạn bấm 'lưu vào remora'. một phần văn bản đọc từ ảnh (tối đa 1.000 ký tự) cùng tóm tắt, tag và ghi chú của tối đa 15 thẻ liên quan được gửi khi phân tích gợi nhớ. câu tìm kiếm được gửi để tạo embedding. remora không đồng bộ âm thầm trong nền.",
                         fontSize = 12.sp,
                         color = RemoraSubtleText,
                         lineHeight = 16.sp

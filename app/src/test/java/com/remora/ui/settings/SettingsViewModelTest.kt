@@ -7,7 +7,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -94,6 +96,9 @@ class SettingsViewModelTest {
         )
         val fakeDao = FakeAppSettingDao(initial)
         val viewModel = SettingsViewModel(fakeDao)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.setting.collect {}
+        }
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(initial, viewModel.setting.value)

@@ -282,4 +282,44 @@ class ResurfacingScreenTest {
         assertTrue(state.items.isEmpty())
         assertEquals(6L, state.headerCard?.id)
     }
+
+    @Test
+    fun resolveResurfacingUiState_latestCardFailed_returnsLatestFailedEmptyState() {
+        val failedCard = createTestCard(
+            id = 7L,
+            title = "Bài học bị lỗi",
+            status = ProcessingStatus.FAILED
+        )
+
+        val state = resolveResurfacingUiState(
+            sourceCard = null,
+            items = emptyList(),
+            latestCard = failedCard
+        )
+
+        assertEquals(ResurfacingEmptyReason.LATEST_FAILED, state.emptyReason)
+        assertEquals("Bài học bị lỗi", state.headerTitle)
+        assertTrue(state.items.isEmpty())
+        assertEquals(7L, state.headerCard?.id)
+    }
+
+    @Test
+    fun resolveResurfacingUiState_sourceCardFailed_returnsLatestFailedEmptyState() {
+        val failedCard = createTestCard(
+            id = 8L,
+            title = "Bài học thất bại",
+            status = ProcessingStatus.FAILED
+        )
+
+        val state = resolveResurfacingUiState(
+            sourceCard = failedCard,
+            items = emptyList(),
+            latestCard = failedCard
+        )
+
+        assertEquals(ResurfacingEmptyReason.LATEST_FAILED, state.emptyReason)
+        assertEquals("Bài học thất bại", state.headerTitle)
+        assertTrue(state.items.isEmpty())
+        assertEquals(8L, state.headerCard?.id)
+    }
 }
