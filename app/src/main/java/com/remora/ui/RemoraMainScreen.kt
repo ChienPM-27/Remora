@@ -41,6 +41,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.remora.capture.CaptureEventManager
+import com.remora.capture.CapturePolicy
 import com.remora.capture.NotificationHelper
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
@@ -338,20 +339,30 @@ fun RemoraMainScreen(
                 NotificationHelper.dismissNotification(context)
                 activeCaptureUri = null
             },
-            onToggleNotifications = {
+            onMute1Hour = {
+                NotificationHelper.dismissNotification(context)
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    db.appSettingDao().ensureRow()
-                    db.appSettingDao().setNotificationsEnabled(false)
+                    CapturePolicy.applyCaptureAction(
+                        NotificationHelper.ACTION_MUTE_1H,
+                        db.appSettingDao(),
+                        System.currentTimeMillis()
+                    )
                 }
+                Toast.makeText(context, "Đã tắt nhận diện ảnh chụp trong 1 giờ", Toast.LENGTH_SHORT).show()
                 activeCaptureUri = null
             },
             onPauseMonitoring = {
+                NotificationHelper.dismissNotification(context)
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    db.appSettingDao().ensureRow()
-                    db.appSettingDao().setPaused(true)
+                    CapturePolicy.applyCaptureAction(
+                        NotificationHelper.ACTION_PAUSE,
+                        db.appSettingDao(),
+                        System.currentTimeMillis()
+                    )
                 }
+                Toast.makeText(context, "Đã tạm dừng nhận diện ảnh chụp", Toast.LENGTH_SHORT).show()
                 activeCaptureUri = null
             }
         )

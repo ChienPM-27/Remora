@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.remora.capture.CaptureEventManager
 import com.remora.capture.CaptureForegroundService
+import com.remora.capture.CapturePolicy
 import com.remora.capture.NotificationHelper
 import com.remora.capture.ScreenshotObserver
 import com.remora.data.local.RemoraDatabase
@@ -113,6 +114,13 @@ class MainActivity : ComponentActivity() {
             registerScreenCaptureCallback(mainExecutor) {
                 Timber.i("ScreenCaptureCallback triggered by OS")
                 lifecycleScope.launch(Dispatchers.IO) {
+                    val db = RemoraDatabase.getInstance(applicationContext)
+                    val setting = db.appSettingDao().getSetting()
+                    if (setting?.consentGranted != true || CapturePolicy.isCaptureSuppressed(setting, System.currentTimeMillis())) {
+                        Timber.d("ScreenCaptureCallback ignored: screenshot monitoring is suppressed or consent not granted.")
+                        return@launch
+                    }
+
                     // Small delay to allow MediaStore write completion
                     delay(500L)
                     val uri = ScreenshotObserver.queryLatestScreenshotUri(applicationContext)

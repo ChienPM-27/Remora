@@ -267,5 +267,25 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
     - `shouldShowResurfacingAlert(setting)` (với `setting == null` mặc định `true` - bật thông báo).
   - Viết unit tests kiểm thử logic `CapturePolicy` và `ConsentViewModel` với fake DAO, viết `MigrationTest` (androidTest) kiểm chứng migration Room từ schema 1 lên schema 2.
 
+---
+
+## 12. Tối ưu Nút Thao tác trên Notification Chụp Màn hình & Tách Tạm dừng (2026-10-24)
+
+* **Bối cảnh & Giới hạn của Hệ điều hành Android:**
+  - Android SystemUI áp dụng giới hạn cứng: mỗi thông báo tương tác (`interactive notification`) chỉ hiển thị tối đa **3 nút hành động** (`NotificationCompat.Action`). Nếu khai báo từ nút thứ 4 trở đi, hệ thống sẽ tự động bỏ qua hoặc cắt bỏ trên hầu hết các launcher và panel thông báo.
+  - Trước đây thông báo phát hiện chụp màn hình khai báo 3 nút: "Lưu" (kèm `RemoteInput`), "Bỏ qua", và "Tạm dừng". Nút "Tắt 1 giờ" (`ACTION_MUTE_1H`) đã được định nghĩa nhưng chưa được gắn vào giao diện notification.
+* **Quyết định Kỹ thuật:**
+  - **Notification chụp màn hình duy trì đúng 3 nút:**
+    1. **Lưu**: Mở inline RemoteInput cho phép người dùng nhập trực tiếp ghi chú/user_intent (VD: "ôn thi giữa kỳ") và lưu thẻ dưới nền.
+    2. **Bỏ qua**: Đóng thông báo ngay lập tức, không lưu và không gửi bất kỳ dữ liệu nào rời khỏi máy.
+    3. **Tắt 1 giờ (`ACTION_MUTE_1H`)**: Tạm thời tắt nhận diện ảnh chụp trong 60 phút (`pause_until = now + 3_600_000ms`), thích hợp khi người dùng đang lướt mạng xã hội hoặc chụp ảnh cá nhân liên tục.
+  - **Chuyển "Tạm dừng" (vô thời hạn) sang Bottom Sheet & Màn hình Cài đặt:**
+    - Nút "Tạm dừng" được đưa vào footer của `SavePromptSheet` ("tắt 1 giờ" · "tạm dừng") và switch "Tự động nhận diện ảnh chụp" trên `SettingsScreen`.
+    - Tránh làm quá tải các hành động trên thanh thông báo, đồng thời đảm bảo người dùng có lựa chọn tắt nhanh 1 giờ tiện lợi ngay từ notification.
+  - **Xử lý Capture Action qua hàm thuần `applyCaptureAction`:**
+    - Tách biệt logic cập nhật cấu hình theo action thành hàm suspend `applyCaptureAction(action, dao, nowMs)`.
+    - `CaptureActionReceiver` thực hiện gọi hàm này bên trong khối `goAsync()` với timeout an toàn 8 giây.
+
+
 
 

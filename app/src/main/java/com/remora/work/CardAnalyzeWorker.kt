@@ -7,6 +7,8 @@ import androidx.work.WorkerParameters
 import com.remora.RemoraApp
 import com.remora.ai.AiGatewayClient
 import com.remora.ai.ApiException
+import com.remora.capture.CapturePolicy
+import com.remora.capture.NotificationHelper
 import com.remora.core.model.contract.VectorMath
 import com.remora.core.model.entity.CardTags
 import com.remora.core.model.entity.ContentType
@@ -102,8 +104,8 @@ class CardAnalyzeWorker(
                     val resurfacedItems = resurfacingManager.runResurfacingPipeline(updatedCard)
                     if (resurfacedItems.isNotEmpty()) {
                         val setting = db.appSettingDao().getSetting()
-                        if (com.remora.capture.CapturePolicy.shouldShowResurfacingAlert(setting)) {
-                            com.remora.capture.NotificationHelper.showResurfacingAlert(
+                        if (CapturePolicy.shouldShowResurfacingAlert(setting)) {
+                            NotificationHelper.showResurfacingAlert(
                                 context = applicationContext,
                                 cardTitle = updatedCard.title,
                                 matchCount = resurfacedItems.size

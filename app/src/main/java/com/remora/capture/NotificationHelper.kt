@@ -92,10 +92,10 @@ object NotificationHelper {
         }
         val skipPendingIntent = PendingIntent.getBroadcast(context, 2, skipIntent, piFlags)
 
-        val pauseIntent = Intent(context, CaptureActionReceiver::class.java).apply {
-            action = ACTION_PAUSE
+        val mute1hIntent = Intent(context, CaptureActionReceiver::class.java).apply {
+            action = ACTION_MUTE_1H
         }
-        val pausePendingIntent = PendingIntent.getBroadcast(context, 3, pauseIntent, piFlags)
+        val mute1hPendingIntent = PendingIntent.getBroadcast(context, 3, mute1hIntent, piFlags)
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
@@ -107,7 +107,7 @@ object NotificationHelper {
             .setAutoCancel(true)
             .addAction(saveAction)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Bỏ qua", skipPendingIntent)
-            .addAction(android.R.drawable.ic_media_pause, "Tạm dừng", pausePendingIntent)
+            .addAction(android.R.drawable.ic_lock_idle_alarm, "Tắt 1 giờ", mute1hPendingIntent)
             .build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

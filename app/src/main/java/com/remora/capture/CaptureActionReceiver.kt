@@ -66,11 +66,11 @@ class CaptureActionReceiver : BroadcastReceiver() {
                             Timber.i("User skipped screenshot saving. Zero data leaves device.")
                         }
 
+                        NotificationHelper.ACTION_MUTE_1H,
                         NotificationHelper.ACTION_PAUSE -> {
                             val db = RemoraDatabase.getInstance(context)
-                            db.appSettingDao().ensureRow()
-                            db.appSettingDao().setPaused(true)
-                            Timber.i("Screenshot monitoring paused by user.")
+                            applyCaptureAction(action, db.appSettingDao(), System.currentTimeMillis())
+                            Timber.i("Screenshot capture action applied: $action")
                         }
                     }
                 }
@@ -80,5 +80,10 @@ class CaptureActionReceiver : BroadcastReceiver() {
                 pendingResult.finish()
             }
         }
+    }
+
+    companion object {
+        suspend fun applyCaptureAction(action: String, dao: com.remora.data.local.dao.AppSettingDao, nowMs: Long): Boolean =
+            com.remora.capture.applyCaptureAction(action, dao, nowMs)
     }
 }
