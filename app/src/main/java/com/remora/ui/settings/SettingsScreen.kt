@@ -34,7 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,6 +56,7 @@ fun SettingsScreen(
     onClearAllCards: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val scope = rememberCoroutineScope()
     var autoDetectEnabled by remember { mutableStateOf(true) }
     var notificationEnabled by remember { mutableStateOf(true) }
     var showConfirmClearDialog by remember { mutableStateOf(false) }
@@ -209,7 +213,9 @@ fun SettingsScreen(
                     androidx.compose.material3.TextButton(
                         onClick = {
                             showConfirmClearDialog = false
-                            onClearAllCards()
+                            scope.launch(Dispatchers.IO) {
+                                onClearAllCards()
+                            }
                         }
                     ) {
                         Text("Xóa hết", color = Color(0xFFEF4444))

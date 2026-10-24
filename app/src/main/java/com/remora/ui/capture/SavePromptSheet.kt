@@ -182,25 +182,18 @@ fun SavePromptSheet(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             suggestionChips.forEach { chip ->
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(percent = 50))
-                                        .background(Color.White)
-                                        .clickable { userIntentText = chip }
-                                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                                Surface(
+                                    shape = RoundedCornerShape(percent = 50),
+                                    border = BorderStroke(1.dp, RemoraBorder),
+                                    color = Color.Transparent,
+                                    modifier = Modifier.clickable { userIntentText = chip }
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(percent = 50),
-                                        border = BorderStroke(1.dp, RemoraBorder),
-                                        color = Color.Transparent
-                                    ) {
-                                        Text(
-                                            text = chip,
-                                            fontSize = 13.sp,
-                                            color = RemoraNavyDark,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                        )
-                                    }
+                                    Text(
+                                        text = chip,
+                                        fontSize = 13.sp,
+                                        color = RemoraNavyDark,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
                                 }
                             }
                         }

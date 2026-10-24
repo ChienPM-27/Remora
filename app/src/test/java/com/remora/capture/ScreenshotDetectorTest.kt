@@ -7,9 +7,10 @@ import org.junit.Test
 class ScreenshotDetectorTest {
 
     private fun isScreenshotPath(relativePath: String?, displayName: String?): Boolean {
-        val path = relativePath?.lowercase() ?: ""
-        val name = displayName?.lowercase() ?: ""
-        return path.contains("screenshot") || name.contains("screenshot") || name.startsWith("scr_")
+        return ScreenshotObserver.isScreenshot(
+            path = relativePath.orEmpty(),
+            name = displayName.orEmpty()
+        )
     }
 
     @Test
@@ -25,5 +26,6 @@ class ScreenshotDetectorTest {
         assertFalse(isScreenshotPath("DCIM/Camera/", "IMG_20261022_120000.jpg"))
         assertFalse(isScreenshotPath("Download/", "lecture_notes.pdf"))
         assertFalse(isScreenshotPath("Pictures/Telegram/", "photo_2026.jpg"))
+        assertFalse(isScreenshotPath("Pictures/", "holiday_photo.jpg"))
     }
 }

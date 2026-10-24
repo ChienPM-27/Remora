@@ -16,6 +16,7 @@ sealed interface SearchUiState {
     object Loading : SearchUiState
     data class Success(val results: List<SearchResultCard>) : SearchUiState
     object Empty : SearchUiState
+    data class Error(val message: String) : SearchUiState
 }
 
 class SearchViewModel(
@@ -42,11 +43,12 @@ class SearchViewModel(
         searchJob = viewModelScope.launch {
             delay(400) // debounce
             _uiState.value = SearchUiState.Loading
-            val results = searchEngine.search(newQuery)
-            if (results.isEmpty()) {
-                _uiState.value = SearchUiState.Empty
-            } else {
-                _uiState.value = SearchUiState.Success(results)
+            try {
+                val results = searchEngine.search(newQuery)
+                _uiState.value = if (results.isEmpty()) SearchUiState.Empty else SearchUiState.Success(results)
+            } catch (e: Exception) {
+                timber.log.Timber.e(e, "Search failed for query: $newQuery")
+                _uiState.value = SearchUiState.Error(e.message ?: "Tìm kiếm thất bại, vui lòng thử lại")
             }
         }
     }

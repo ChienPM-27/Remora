@@ -16,5 +16,6 @@ remora_docs_extracted.txt
 .env.*
 !.env.example
 bin/
+*.code-workspace
 
 

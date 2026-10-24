@@ -118,6 +118,11 @@ class IpRateLimiter(
     }
 }
 
+/**
+ * Quota manager — in-memory only (ConcurrentHashMap).
+ * Quotas reset when the container restarts. This is acceptable for demo.
+ * Production must use persistent storage (Redis hoặc DB).
+ */
 class UserQuotaManager(
     private val limits: Map<QuotaType, Int> = QuotaType.entries.associateWith { it.defaultLimit },
     private val clock: () -> LocalDate = { LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")) }

@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -78,6 +79,7 @@ fun RemoraMainScreen(
     initialCaptureUri: Uri? = null,
     modifier: Modifier = Modifier
 ) {
+    val scope = rememberCoroutineScope()
     var currentTab by remember { mutableStateOf(MainNavigationTab.TIMELINE) }
     var activeCaptureUri by remember { mutableStateOf<Uri?>(initialCaptureUri) }
     val context = LocalContext.current
@@ -257,7 +259,7 @@ fun RemoraMainScreen(
                 MainNavigationTab.SETTINGS -> {
                     SettingsScreen(
                         onClearAllCards = {
-                            CoroutineScope(Dispatchers.IO).launch {
+                            scope.launch(Dispatchers.IO) {
                                 val db = RemoraDatabase.getInstance(context)
                                 db.memoryCardDao().deleteAllCards()
                                 db.resurfacingResultDao().deleteAllResults()
@@ -276,7 +278,7 @@ fun RemoraMainScreen(
             onSave = { intentText ->
                 NotificationHelper.dismissNotification(context)
                 val db = RemoraDatabase.getInstance(context)
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch(Dispatchers.IO) {
                     val card = MemoryCard(
                         imageUri = uri.toString(),
                         createdAt = System.currentTimeMillis(),
@@ -305,7 +307,7 @@ fun RemoraMainScreen(
                 activeCaptureUri = null
             },
             onToggleNotifications = {
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
                     db.appSettingDao().insertOrUpdate(
                         AppSettingEntity(id = 1L, notificationsEnabled = false, paused = false)
@@ -314,7 +316,7 @@ fun RemoraMainScreen(
                 activeCaptureUri = null
             },
             onPauseMonitoring = {
-                CoroutineScope(Dispatchers.IO).launch {
+                scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
                     db.appSettingDao().insertOrUpdate(
                         AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)

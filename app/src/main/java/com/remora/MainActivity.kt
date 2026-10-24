@@ -44,12 +44,22 @@ class MainActivity : ComponentActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.entries.all { it.value }
-        if (allGranted) {
-            Timber.i("All requested permissions granted by user, starting CaptureForegroundService")
+        val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val canReadImages = ContextCompat.checkSelfPermission(
+            this, mediaPermission
+        ) == PackageManager.PERMISSION_GRANTED
+
+        // Notification permission is optional for monitoring. Denying it must not
+        // prevent the foreground service and MediaStore observer from starting.
+        if (canReadImages) {
+            Timber.i("Image permission granted; starting CaptureForegroundService. Notification permission result: ${permissions[Manifest.permission.POST_NOTIFICATIONS]}")
             CaptureForegroundService.start(this)
         } else {
-            Timber.w("Some permissions were denied: $permissions")
+            Timber.w("Image/media permission denied; screenshot monitoring cannot start: $permissions")
         }
     }
 
@@ -65,15 +75,29 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startCaptureServiceIfPermitted() {
-        val permissions = getRequiredPermissions()
-        val allGranted = permissions.all { perm ->
-            ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
-        }
-
-        if (allGranted) {
-            Timber.i("Permissions already granted, starting CaptureForegroundService")
-            CaptureForegroundService.start(this)
+        val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_IMAGES
         } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        val canReadImages = ContextCompat.checkSelfPermission(
+            this, mediaPermission
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (canReadImages) {
+            // Monitoring depends on media access, not notification permission.
+            // The OS may suppress user-facing notifications if POST_NOTIFICATIONS is denied.
+            Timber.i("Image permission granted, starting CaptureForegroundService")
+            CaptureForegroundService.start(this)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    this, Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Timber.w("POST_NOTIFICATIONS is denied; screenshot monitoring runs but capture prompts may be hidden")
+            }
+        } else {
+            val permissions = getRequiredPermissions()
             Timber.i("Requesting runtime permissions: ${permissions.joinToString()}")
             permissionLauncher.launch(permissions)
         }

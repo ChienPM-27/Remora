@@ -32,11 +32,16 @@ abstract class RemoraDatabase : RoomDatabase() {
 
         fun getInstance(context: Context): RemoraDatabase {
             return INSTANCE ?: synchronized(this) {
+                // Production must use explicit migrations — xem docs/engineering/definition-of-done.md
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     RemoraDatabase::class.java,
                     "remora.db"
-                ).build()
+                ).apply {
+                    if (com.remora.BuildConfig.DEBUG) {
+                        fallbackToDestructiveMigration()
+                    }
+                }.build()
                 INSTANCE = instance
                 instance
             }

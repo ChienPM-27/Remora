@@ -264,6 +264,21 @@ fun SearchScreen(
                     )
                 }
             }
+            is SearchUiState.Error -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = uiState.message,
+                        fontSize = 14.sp,
+                        color = Color(0xFFEF4444),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
             is SearchUiState.Success -> {
                 // Subtitle count (from 02-search.png)
                 Text(

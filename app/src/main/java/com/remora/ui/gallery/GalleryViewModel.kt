@@ -20,8 +20,8 @@ import kotlinx.coroutines.launch
 
 class GalleryViewModel(
     private val repository: MemoryCardRepository,
-    private val resurfacingResultDao: ResurfacingResultDao? = null,
-    private val memoryCardDao: MemoryCardDao? = null
+    private val resurfacingResultDao: ResurfacingResultDao,
+    private val memoryCardDao: MemoryCardDao
 ) : ViewModel() {
 
     val cards: StateFlow<List<MemoryCard>> = repository.getAllCards()
@@ -31,10 +31,10 @@ class GalleryViewModel(
             initialValue = emptyList()
         )
 
-    val resurfacedItems: StateFlow<List<ResurfacedItem>> = (resurfacingResultDao?.getRecentResultsFlow()
-        ?.map { entities ->
+    val resurfacedItems: StateFlow<List<ResurfacedItem>> = resurfacingResultDao.getRecentResultsFlow()
+        .map { entities ->
             entities.mapNotNull { entity ->
-                val cardEntity = memoryCardDao?.getCardById(entity.candidateCardId)
+                val cardEntity = memoryCardDao.getCardById(entity.candidateCardId)
                 val card = cardEntity?.toDomainModel()
                 if (card != null) {
                     ResurfacedItem(
@@ -49,8 +49,7 @@ class GalleryViewModel(
                 } else null
             }
         }
-        ?.flowOn(Dispatchers.IO)
-        ?: kotlinx.coroutines.flow.flowOf(emptyList()))
+        .flowOn(Dispatchers.IO)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

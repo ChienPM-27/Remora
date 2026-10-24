@@ -16,7 +16,7 @@ object NotificationHelper {
     const val CHANNEL_ID = "remora_capture_channel"
     const val RESURFACING_CHANNEL_ID = "remora_resurfacing_channel"
     const val NOTIFICATION_ID = 1001
-    const val RESURFACING_NOTIFICATION_ID = 1002
+    const val RESURFACING_NOTIFICATION_ID = 2001
 
     const val ACTION_SAVE = "com.remora.action.SAVE"
     const val ACTION_SKIP = "com.remora.action.SKIP"

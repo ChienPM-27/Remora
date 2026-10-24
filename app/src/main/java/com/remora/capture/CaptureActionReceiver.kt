@@ -12,6 +12,7 @@ import com.remora.data.local.entity.MemoryCardEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 
 class CaptureActionReceiver : BroadcastReceiver() {
@@ -27,52 +28,56 @@ class CaptureActionReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                when (action) {
-                    NotificationHelper.ACTION_SAVE -> {
-                        val imageUriStr = intent.getStringExtra(NotificationHelper.EXTRA_IMAGE_URI) ?: return@launch
-                        val remoteInputResults = RemoteInput.getResultsFromIntent(intent)
-                        val userIntent = remoteInputResults?.getCharSequence(NotificationHelper.EXTRA_USER_INTENT)?.toString()
+                withTimeout(8_000L) {
+                    when (action) {
+                        NotificationHelper.ACTION_SAVE -> {
+                            val imageUriStr = intent.getStringExtra(NotificationHelper.EXTRA_IMAGE_URI)
+                            if (imageUriStr != null) {
+                                val remoteInputResults = RemoteInput.getResultsFromIntent(intent)
+                                val userIntent = remoteInputResults?.getCharSequence(NotificationHelper.EXTRA_USER_INTENT)?.toString()
 
-                        val db = RemoraDatabase.getInstance(context)
-                        val card = MemoryCard(
-                            imageUri = imageUriStr,
-                            createdAt = System.currentTimeMillis(),
-                            userIntent = userIntent,
-                            title = "Đang xử lý...",
-                            status = ProcessingStatus.PENDING
-                        )
-                        val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
-                        Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
+                                val db = RemoraDatabase.getInstance(context)
+                                val card = MemoryCard(
+                                    imageUri = imageUriStr,
+                                    createdAt = System.currentTimeMillis(),
+                                    userIntent = userIntent,
+                                    title = "Đang xử lý...",
+                                    status = ProcessingStatus.PENDING
+                                )
+                                val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
+                                Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
 
-                        // Enqueue background analysis worker
-                        val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
-                            .setConstraints(
-                                androidx.work.Constraints.Builder()
-                                    .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                // Enqueue background analysis worker
+                                val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
+                                    .setConstraints(
+                                        androidx.work.Constraints.Builder()
+                                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                            .build()
+                                    )
+                                    .setInputData(
+                                        androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to newId)
+                                    )
                                     .build()
+
+                                androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
+                            }
+                        }
+
+                        NotificationHelper.ACTION_SKIP -> {
+                            Timber.i("User skipped screenshot saving. Zero data leaves device.")
+                        }
+
+                        NotificationHelper.ACTION_PAUSE -> {
+                            val db = RemoraDatabase.getInstance(context)
+                            db.appSettingDao().insertOrUpdate(
+                                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
                             )
-                            .setInputData(
-                                androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to newId)
-                            )
-                            .build()
-
-                        androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
-                    }
-
-                    NotificationHelper.ACTION_SKIP -> {
-                        Timber.i("User skipped screenshot saving. Zero data leaves device.")
-                    }
-
-                    NotificationHelper.ACTION_PAUSE -> {
-                        val db = RemoraDatabase.getInstance(context)
-                        db.appSettingDao().insertOrUpdate(
-                            AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
-                        )
-                        Timber.i("Screenshot monitoring paused by user.")
+                            Timber.i("Screenshot monitoring paused by user.")
+                        }
                     }
                 }
             } catch (e: Exception) {
-                Timber.e(e, "Error handling action in CaptureActionReceiver")
+                Timber.e(e, "Error or timeout in CaptureActionReceiver")
             } finally {
                 pendingResult.finish()
             }
