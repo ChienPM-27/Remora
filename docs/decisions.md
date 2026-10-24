@@ -286,6 +286,35 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
     - Tách biệt logic cập nhật cấu hình theo action thành hàm suspend `applyCaptureAction(action, dao, nowMs)`.
     - `CaptureActionReceiver` thực hiện gọi hàm này bên trong khối `goAsync()` với timeout an toàn 8 giây.
 
+---
+
+## 13. Tối ưu Resurfacing: Khử Trùng Lặp Ứng Viên, Phân Nhóm Sư Phạm & Thông Báo Chi Tiết (2026-10-24)
+
+* **Vấn đề phát hiện:**
+  - `filterValidItems`: Kết quả gợi nhớ trả về từ LLM không khử trùng lặp `candidate_id`, dẫn đến một thẻ có thể xuất hiện ở nhiều nhóm khác nhau và việc giới hạn 2 mục/nhóm bị áp đặt theo thứ tự LLM thay vì độ tin cậy.
+  - `GalleryViewModel`: `resurfacedItems` trước đây lấy 20 kết quả mới nhất của tất cả các thẻ nguồn bị trộn lẫn, khiến tab Gợi nhớ hiển thị tiêu đề của thẻ mới nhất nhưng nội dung lại thuộc về các thẻ khác.
+  - Giao diện `ResurfacingScreen`: Danh sách phẳng, gọi `.lowercase()` làm hỏng các công thức toán, tên riêng và mã nguồn trong `title`/`reason`. Thông tin `new_info` và `benefit` chưa được hiển thị. Có code chết chưa sử dụng (`ResurfacingBanner`, `ResurfacingDetailDialog`).
+  - Thông báo gợi nhớ (`showResurfacingAlert`): Chỉ hiển thị câu chung chung "Có N liên kết hữu ích", không có nội dung sư phạm và chưa có PendingIntent điều hướng trực tiếp vào tab Gợi nhớ.
+
+* **Quyết định Kỹ thuật:**
+  1. **Khử trùng lặp và giới hạn 2 mục/nhóm (`ResurfaceValidator`):**
+     - Sắp xếp toàn bộ ứng viên hợp lệ theo `confidence` giảm dần.
+     - Khử trùng lặp theo `candidateId`: nếu một ứng viên xuất hiện ở nhiều nhóm, giữ lại bản ghi có confidence cao nhất; nếu hoà điểm, ưu tiên theo thứ tự nhóm `ACTIONABLE > COMPLEMENTARY > SIMILAR`.
+     - Sau khi khử trùng lặp mới áp dụng giới hạn tối đa 2 mục cho mỗi nhóm.
+  2. **Cô lập bộ kết quả theo thẻ nguồn mới nhất (`ResurfacingManager` & `GalleryViewModel`):**
+     - `ResurfacingManager` thực hiện xoá kết quả cũ của `newCardId` (`deleteResultsForCard`) trước khi chèn kết quả mới để tránh nhân đôi bản ghi khi phân tích lại.
+     - `ResurfacingResultDao` bổ sung truy vấn `getLatestSourceCardId()`. `GalleryViewModel` lắng nghe và chỉ tải kết quả của đúng thẻ nguồn mới nhất, không trộn lẫn kết quả của các thẻ khác nhau.
+  3. **Phân nhóm sư phạm và hiển thị chi tiết (`ResurfacingScreen`):**
+     - Chia thành 3 nhóm rõ ràng: "tương đồng" (`SIMILAR`), "bổ trợ" (`COMPLEMENTARY`), "có giá trị sử dụng" (`ACTIONABLE`).
+     - Từng thẻ hỗ trợ mở rộng (expandable) để xem chi tiết `new_info` (thông tin mới) và `benefit` (lợi ích học tập).
+     - Loại bỏ hoàn toàn `.lowercase()` trên `title` và `reason` để giữ nguyên vẹn ký hiệu toán học, hoa/thường và công thức.
+     - Xoá triệt để code chết `ResurfacingBanner.kt` và `ResurfacingDetailDialog.kt`.
+  4. **Thông báo BigTextStyle chi tiết kèm điều hướng trực tiếp (`NotificationHelper`):**
+     - Xây dựng nội dung BigTextStyle tối đa 3 dòng: `[nhóm] · [tiêu đề ứng viên] — [lý do]`, ưu tiên chọn ứng viên có confidence cao nhất từ mỗi nhóm.
+     - Cắt chuỗi an toàn không phá vỡ ký tự Unicode có dấu (NFC) hoặc ký tự xuống dòng.
+     - Thêm `EXTRA_OPEN_RESURFACING = true` vào PendingIntent (FLAG_IMMUTABLE) để MainActivity tự động chuyển sang tab Gợi nhớ khi người dùng chạm vào thông báo.
+
+
 
 
 

@@ -367,9 +367,10 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 
 ## Phase 9: Extensions & Post-MVP Enhancements (Priority: P1 / P2)
 
-- [ ] **T032 [P1] Settings Screen for screenshot monitoring and pause timer**
+- [x] **T032 [P1] Settings Screen for screenshot monitoring and pause timer**
   - **File Path**: `app/src/main/java/com/remora/ui/settings/SettingsScreen.kt`
   - **Acceptance Criteria**: Allows user to toggle capture on/off or pause for 1 hour.
+  - **Implementation Status**: Hoàn thành qua `SettingsViewModel` + `AppSettingDao`. Kết nối trực tiếp CSDL Room (`app_setting`), hỗ trợ bật/tắt tự động nhận diện ảnh chụp (cờ `paused`), hiển thị thời gian tạm dừng có thời hạn (`pause_until` / "Đang tắt đến HH:mm"), và bật/tắt thông báo gợi nhớ (`notifications_enabled`). Có bộ unit tests đầy đủ trong `SettingsViewModelTest`.
 
 - [ ] **T033 [P2] Full-Text Keyword Search (FTS) SQLite virtual table**
   - **File Path**: `app/src/main/java/com/remora/data/local/MemoryCardFtsDao.kt`

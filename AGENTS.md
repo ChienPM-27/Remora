@@ -51,6 +51,11 @@ Placeholders to fill: `applicationId = com.remora`, `minSdk = 28`, `PROXY_BASE_U
 - `memory_card`: id, image_uri, created_at, user_intent, title, summary, tags_json (`{subject, topics[]}`), content_type, ocr_text, embedding (BLOB), status (`PENDING | DONE | FAILED`), attempt_count, error_code
 - `resurfacing_result`: id, new_card_id, candidate_card_id, group, relation, new_info, benefit, reason, confidence, created_at
 - `app_setting`: id, consent_granted, notifications_enabled, paused, pause_until
+  - `consent_granted`: người dùng đã đồng ý chính sách bảo mật / quyền riêng tư (chỉ màn hình Consent đọc/ghi; khi đã `true` thì không bao giờ tự động hiện lại màn Consent dù bật/tắt notification hay mute).
+  - `notifications_enabled`: người dùng cho phép Remora gửi thông báo kết quả gợi nhớ (`resurfacing alert`).
+  - `paused`: tạm dừng phát hiện và nhắc lưu ảnh chụp màn hình vô thời hạn.
+  - `pause_until`: epoch timestamp (ms) tạm dừng chụp màn hình có thời hạn (nút "Tắt 1 giờ" -> `now + 3_600_000`). Bị chặn khi `now < pause_until`.
+  - Quy tắc cập nhật: không ghi đè toàn bộ entity `AppSettingEntity`, luôn cập nhật từng cột độc lập qua DAO.
 
 Use enums (not free strings) for `status`, `content_type`, `group`, `relation`.
 
