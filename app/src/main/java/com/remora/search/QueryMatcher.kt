@@ -112,8 +112,14 @@ object QueryParser {
 }
 
 data class LexicalResult(val score: Float, val matchedTerms: Int, val totalTerms: Int) {
-    /** At least half of the meaningful terms must be present. */
-    val isMatch: Boolean get() = totalTerms > 0 && matchedTerms * 2 >= totalTerms
+    /**
+     * Coverage gate, tightened from >=1/2 after the v1 benchmark showed junk queries like
+     * "công thức nấu ăn" matching math cards through the generic term "công thức" (2 of 4 terms).
+     * Short queries (<= 2 terms) keep the >=1/2 rule so single-word abbreviations still match;
+     * longer queries must cover at least 2/3 of their meaningful terms.
+     */
+    val isMatch: Boolean get() = totalTerms > 0 &&
+        (if (totalTerms <= 2) matchedTerms * 2 >= totalTerms else matchedTerms * 3 >= totalTerms * 2)
 }
 
 object LexicalMatcher {
