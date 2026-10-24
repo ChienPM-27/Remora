@@ -85,10 +85,12 @@ fun RemoraMainScreen(
         remember(context) { SettingsViewModel(RemoraDatabase.getInstance(context).appSettingDao()) }
     },
     initialCaptureUri: Uri? = null,
+    initialTab: MainNavigationTab = MainNavigationTab.TIMELINE,
+    onTabSelected: (MainNavigationTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    var currentTab by remember { mutableStateOf(MainNavigationTab.TIMELINE) }
+    var currentTab by remember { mutableStateOf(initialTab) }
     var activeCaptureUri by remember { mutableStateOf<Uri?>(initialCaptureUri) }
     val context = LocalContext.current
 
@@ -105,6 +107,11 @@ fun RemoraMainScreen(
         if (initialCaptureUri != null) {
             activeCaptureUri = initialCaptureUri
         }
+    }
+
+    // Keep currentTab updated if MainActivity passes a new initialTab via Intent (e.g. from notification)
+    LaunchedEffect(initialTab) {
+        currentTab = initialTab
     }
 
     val cards by galleryViewModel.cards.collectAsState()
@@ -125,7 +132,10 @@ fun RemoraMainScreen(
                 // 1. Tab: dòng thời gian (from 01-timeline.png)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.TIMELINE,
-                    onClick = { currentTab = MainNavigationTab.TIMELINE },
+                    onClick = {
+                        currentTab = MainNavigationTab.TIMELINE
+                        onTabSelected(MainNavigationTab.TIMELINE)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.TIMELINE) Icons.Filled.FormatListBulleted else Icons.Outlined.FormatListBulleted,
@@ -150,7 +160,10 @@ fun RemoraMainScreen(
                 // 2. Tab: tìm (from 02-search.png)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.SEARCH,
-                    onClick = { currentTab = MainNavigationTab.SEARCH },
+                    onClick = {
+                        currentTab = MainNavigationTab.SEARCH
+                        onTabSelected(MainNavigationTab.SEARCH)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.SEARCH) Icons.Filled.Search else Icons.Outlined.Search,
@@ -175,7 +188,10 @@ fun RemoraMainScreen(
                 // 3. Tab: gợi nhớ (from 03-resurface.png)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.RESURFACE,
-                    onClick = { currentTab = MainNavigationTab.RESURFACE },
+                    onClick = {
+                        currentTab = MainNavigationTab.RESURFACE
+                        onTabSelected(MainNavigationTab.RESURFACE)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.RESURFACE) Icons.Filled.AutoAwesome else Icons.Outlined.AutoAwesome,
@@ -200,7 +216,10 @@ fun RemoraMainScreen(
                 // 4. Tab: cài đặt (from mockups bottom bar)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.SETTINGS,
-                    onClick = { currentTab = MainNavigationTab.SETTINGS },
+                    onClick = {
+                        currentTab = MainNavigationTab.SETTINGS
+                        onTabSelected(MainNavigationTab.SETTINGS)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.SETTINGS) Icons.Filled.Tune else Icons.Outlined.Tune,
@@ -272,7 +291,10 @@ fun RemoraMainScreen(
                                 Toast.makeText(context, "Không thể đọc ảnh đã chọn", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        onNavigateToSearch = { currentTab = MainNavigationTab.SEARCH }
+                        onNavigateToSearch = {
+                            currentTab = MainNavigationTab.SEARCH
+                            onTabSelected(MainNavigationTab.SEARCH)
+                        }
                     )
                 }
 
@@ -342,6 +364,7 @@ fun RemoraMainScreen(
                 }
                 activeCaptureUri = null
                 currentTab = MainNavigationTab.TIMELINE
+                onTabSelected(MainNavigationTab.TIMELINE)
             },
             onDismiss = {
                 NotificationHelper.dismissNotification(context)

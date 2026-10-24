@@ -37,11 +37,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.remora.ui.MainNavigationTab
 import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
 
     private var initialCaptureUri by mutableStateOf<Uri?>(null)
+    private var initialTab by mutableStateOf(MainNavigationTab.TIMELINE)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -109,6 +111,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         handleIncomingCaptureIntent(intent)
+        handleIncomingResurfacingIntent(intent)
 
         // Android 14+ Official Screen Capture Detection API
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -175,7 +178,9 @@ class MainActivity : ComponentActivity() {
                             galleryViewModel = galleryViewModel,
                             searchViewModel = searchViewModel,
                             settingsViewModel = settingsViewModel,
-                            initialCaptureUri = initialCaptureUri
+                            initialCaptureUri = initialCaptureUri,
+                            initialTab = initialTab,
+                            onTabSelected = { initialTab = it }
                         )
                     }
                 }
@@ -187,6 +192,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIncomingCaptureIntent(intent)
+        handleIncomingResurfacingIntent(intent)
     }
 
     private fun handleIncomingCaptureIntent(intent: Intent?) {
@@ -196,6 +202,14 @@ class MainActivity : ComponentActivity() {
             Timber.i("MainActivity received intent with capture uri: $uri")
             initialCaptureUri = uri
             CaptureEventManager.emitScreenshot(uri)
+        }
+    }
+
+    private fun handleIncomingResurfacingIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(NotificationHelper.EXTRA_OPEN_RESURFACING, false) == true) {
+            val newCardId = intent.getLongExtra(NotificationHelper.EXTRA_NEW_CARD_ID, -1L)
+            Timber.i("MainActivity received intent to open resurfacing tab for card #$newCardId")
+            initialTab = MainNavigationTab.RESURFACE
         }
     }
 }

@@ -107,8 +107,9 @@ class CardAnalyzeWorker(
                         if (CapturePolicy.shouldShowResurfacingAlert(setting)) {
                             NotificationHelper.showResurfacingAlert(
                                 context = applicationContext,
-                                cardTitle = updatedCard.title,
-                                matchCount = resurfacedItems.size
+                                sourceCardTitle = updatedCard.title,
+                                resurfacedItems = resurfacedItems,
+                                newCardId = updatedCard.id
                             )
                         }
                     }
