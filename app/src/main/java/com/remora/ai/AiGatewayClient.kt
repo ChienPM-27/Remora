@@ -27,8 +27,12 @@ class ApiException(
     message: String,
     val retryAfterSeconds: Long? = null
 ) : Exception(message) {
+    /**
+     * Permanent client errors: bad request, auth, not found, unprocessable content,
+     * and 413 (payload too large never shrinks on retry). 408 and 429 stay retryable.
+     */
     val isNonRetryableClientError: Boolean
-        get() = statusCode in 400..404 || statusCode == 422
+        get() = statusCode in 400..404 || statusCode == 413 || statusCode == 422
     val isRateLimited: Boolean
         get() = statusCode == 429
     val isServerError: Boolean
@@ -41,7 +45,9 @@ class AiGatewayClient(
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(25, TimeUnit.SECONDS)
         .writeTimeout(25, TimeUnit.SECONDS)
-        .build()
+        .build(),
+    private val demoUsername: String = BuildConfig.DEMO_USERNAME,
+    private val demoPassword: String = BuildConfig.DEMO_PASSWORD
 ) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
@@ -54,8 +60,8 @@ class AiGatewayClient(
             return cachedToken
         }
 
-        val username = BuildConfig.DEMO_USERNAME
-        val password = BuildConfig.DEMO_PASSWORD
+        val username = demoUsername
+        val password = demoPassword
         if (username.isBlank() || password.isBlank()) {
             Timber.e("No demo credentials configured in BuildConfig (DEMO_USERNAME/DEMO_PASSWORD)")
             return null

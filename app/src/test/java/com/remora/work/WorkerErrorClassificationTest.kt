@@ -25,11 +25,24 @@ class WorkerErrorClassificationTest {
         assertTrue("HTTP 429 is rate limited", err429.isRateLimited)
         assertFalse("HTTP 429 is not non-retryable client error", err429.isNonRetryableClientError)
 
+        val err408 = ApiException(408, "Request Timeout")
+        assertFalse("HTTP 408 request timeout stays retryable", err408.isNonRetryableClientError)
+
         val err500 = ApiException(500, "Internal Server Error")
         assertTrue("HTTP 500 is server error", err500.isServerError)
         assertFalse("HTTP 500 is not client error", err500.isNonRetryableClientError)
 
         val err503 = ApiException(503, "Service Unavailable")
         assertTrue("HTTP 503 is server error", err503.isServerError)
+    }
+
+    @Test
+    fun testPayloadTooLargeAndUnprocessableArePermanent() {
+        // 413: a payload over the size limit never shrinks by retrying.
+        val err413 = ApiException(413, "Payload Too Large")
+        assertTrue("HTTP 413 is non-retryable", err413.isNonRetryableClientError)
+
+        val err422 = ApiException(422, "Unprocessable Content")
+        assertTrue("HTTP 422 is non-retryable", err422.isNonRetryableClientError)
     }
 }

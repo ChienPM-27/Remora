@@ -2,8 +2,14 @@ package com.remora.work
 
 import android.content.Context
 import android.net.Uri
+import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
 import com.remora.RemoraApp
 import com.remora.ai.AiGatewayClient
 import com.remora.ai.ApiException
@@ -16,6 +22,7 @@ import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.util.ImageCompressor
 import timber.log.Timber
+import java.util.concurrent.TimeUnit
 
 class CardAnalyzeWorker(
     appContext: Context,
@@ -80,6 +87,16 @@ class CardAnalyzeWorker(
             val rawEmbedding = embeddingResult.getOrThrow().toFloatArray()
             val normalizedEmbedding = VectorMath.l2Normalize(rawEmbedding)
 
+            // Reject invalid vectors before persisting: wrong dimension, NaN/Infinity or zero norm.
+            // The existing row (including any previously valid embedding) stays untouched.
+            if (!VectorMath.isValidEmbedding(normalizedEmbedding)) {
+                Timber.e("Invalid embedding rejected for card #$cardId (size=${normalizedEmbedding.size}, finite=${normalizedEmbedding.all { it.isFinite() }})")
+                return handleFailure(
+                    db, card,
+                    IllegalStateException("INVALID_EMBEDDING: response failed dimension/finiteness/norm validation")
+                )
+            }
+
             // 5. Update Room database to DONE
             val updatedCard = card.copy(
                 title = extracted.title.take(80),
@@ -95,11 +112,12 @@ class CardAnalyzeWorker(
             db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
             Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
 
-            // 6. Trigger Resurfacing pipeline and save results to Room
+            // 6. Trigger Resurfacing pipeline and save results to Room.
+            // A resurfacing service error must not revert the card's DONE analysis status.
             val resurfacingManager = remoraApp?.container?.resurfacingManager
             if (resurfacingManager != null && updatedCard.embedding != null) {
-                try {
-                    val resurfacedItems = resurfacingManager.runResurfacingPipeline(updatedCard)
+                val resurfacingOutcome = resurfacingManager.runResurfacingPipeline(updatedCard)
+                resurfacingOutcome.onSuccess { resurfacedItems ->
                     if (resurfacedItems.isNotEmpty()) {
                         com.remora.capture.NotificationHelper.showResurfacingAlert(
                             context = applicationContext,
@@ -107,8 +125,8 @@ class CardAnalyzeWorker(
                             matchCount = resurfacedItems.size
                         )
                     }
-                } catch (resurfaceEx: Exception) {
-                    Timber.w(resurfaceEx, "Resurfacing pipeline failed silently without breaking card DONE status")
+                }.onFailure { cause ->
+                    Timber.w(cause, "Resurfacing failed with a service error; card #${updatedCard.id} stays DONE")
                 }
             }
 
@@ -125,10 +143,10 @@ class CardAnalyzeWorker(
         card: MemoryCard,
         error: Throwable?
     ): Result {
-        val errorMsg = error?.message ?: "Unknown error"
+        val errorMsg = (error?.message ?: "Unknown error").take(MAX_ERROR_CODE_LENGTH)
         val newAttemptCount = card.attemptCount + 1
 
-        // Distinguish non-retryable client errors (400, 401, 403, 404)
+        // Non-retryable client errors (400-404, 413, 422): retrying the same payload cannot succeed.
         if (error is ApiException && error.isNonRetryableClientError) {
             Timber.e("Non-retryable client error (HTTP ${error.statusCode}) for card #${card.id}. Marking FAILED.")
             val failedCard = card.copy(
@@ -140,7 +158,7 @@ class CardAnalyzeWorker(
             return Result.failure()
         }
 
-        // Retryable errors (429, 5xx, or network timeouts)
+        // Retryable errors (408, 429, 5xx, network timeouts, invalid embedding responses)
         return if (newAttemptCount >= MAX_RETRIES) {
             Timber.e("Max retries ($MAX_RETRIES) exceeded for card #${card.id}. Marking FAILED.")
             val failedCard = card.copy(
@@ -158,12 +176,35 @@ class CardAnalyzeWorker(
                 errorCode = errorMsg
             )
             db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(pendingCard))
-            Result.retry()
+
+            val retryAfterSeconds = (error as? ApiException)?.retryAfterSeconds
+            if (retryAfterSeconds != null && retryAfterSeconds > 0) {
+                // Honor server-provided Retry-After with an explicit delayed re-enqueue
+                // instead of WorkManager's own backoff schedule.
+                Timber.i("429 Retry-After=$retryAfterSeconds s honored for card #${card.id}")
+                scheduleDelayedRetry(card.id, retryAfterSeconds)
+                Result.failure()
+            } else {
+                Result.retry()
+            }
         }
+    }
+
+    private fun scheduleDelayedRetry(cardId: Long, delaySeconds: Long) {
+        val request = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
+            .setInputData(workDataOf(KEY_CARD_ID to cardId))
+            .setConstraints(Constraints(requiredNetworkType = NetworkType.CONNECTED))
+            .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(applicationContext)
+            .enqueueUniqueWork(uniqueWorkName(cardId), ExistingWorkPolicy.REPLACE, request)
     }
 
     companion object {
         const val KEY_CARD_ID = "key_card_id"
         const val MAX_RETRIES = 3
+        const val MAX_ERROR_CODE_LENGTH = 200
+
+        fun uniqueWorkName(cardId: Long): String = "card-analysis-$cardId"
     }
 }

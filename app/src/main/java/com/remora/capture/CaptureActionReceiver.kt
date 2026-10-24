@@ -47,19 +47,28 @@ class CaptureActionReceiver : BroadcastReceiver() {
                                 val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
                                 Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
 
-                                // Enqueue background analysis worker
+                                // Enqueue background analysis worker (unique per card to prevent duplicate concurrent runs)
                                 val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
                                     .setConstraints(
                                         androidx.work.Constraints.Builder()
                                             .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
                                             .build()
                                     )
+                                    .setBackoffCriteria(
+                                        androidx.work.BackoffPolicy.EXPONENTIAL,
+                                        30,
+                                        java.util.concurrent.TimeUnit.SECONDS
+                                    )
                                     .setInputData(
                                         androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to newId)
                                     )
                                     .build()
 
-                                androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
+                                androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+                                    com.remora.work.CardAnalyzeWorker.uniqueWorkName(newId),
+                                    androidx.work.ExistingWorkPolicy.REPLACE,
+                                    workRequest
+                                )
                             }
                         }
 
@@ -69,9 +78,8 @@ class CaptureActionReceiver : BroadcastReceiver() {
 
                         NotificationHelper.ACTION_PAUSE -> {
                             val db = RemoraDatabase.getInstance(context)
-                            db.appSettingDao().insertOrUpdate(
-                                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
-                            )
+                            val current = db.appSettingDao().getSetting() ?: AppSettingEntity(id = 1L)
+                            db.appSettingDao().insertOrUpdate(current.copy(paused = true))
                             Timber.i("Screenshot monitoring paused by user.")
                         }
                     }

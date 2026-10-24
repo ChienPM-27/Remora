@@ -86,7 +86,15 @@ class SearchViewModel(
                 if (myId != requestId) return@launch // a newer query superseded this one
                 _indexedCount.value = outcome.indexedCount
                 if (outcome.results.isEmpty()) {
-                    _uiState.value = SearchUiState.Empty(outcome)
+                    if (!outcome.semanticAvailable) {
+                        // Semantic channel failed and keywords found nothing: this is a recoverable
+                        // AI/network failure, not a trustworthy no-match. Surface it as an error.
+                        _uiState.value = SearchUiState.Error(
+                            "Không xác nhận được kết quả: tìm kiếm theo ý nghĩa đang lỗi và từ khóa không khớp. Kiểm tra kết nối rồi thử lại."
+                        )
+                    } else {
+                        _uiState.value = SearchUiState.Empty(outcome)
+                    }
                 } else {
                     _uiState.value = SearchUiState.Success(outcome)
                     rememberQuery(q)
@@ -94,7 +102,7 @@ class SearchViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Timber.e(e, "Search failed for query: $q")
+                Timber.e(e, "Search failed for query id=$myId")
                 if (myId == requestId) {
                     _uiState.value = SearchUiState.Error("Tìm kiếm thất bại, vui lòng thử lại")
                 }

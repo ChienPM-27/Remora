@@ -72,7 +72,7 @@ class AiGatewayClientTest {
         }
 
         val testHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient)
+        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient, demoUsername = "demo", demoPassword = "demo")
 
         val result = client.generateEmbedding("test text", "RETRIEVAL_QUERY")
         assertTrue("Request should succeed after auto-relogin retry", result.isSuccess)
@@ -125,7 +125,7 @@ class AiGatewayClientTest {
         }
 
         val testHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient)
+        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient, demoUsername = "demo", demoPassword = "demo")
 
         val result1 = client.generateEmbedding("first query")
         val result2 = client.generateEmbedding("second query")
@@ -179,7 +179,7 @@ class AiGatewayClientTest {
         }
 
         val testHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient)
+        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient, demoUsername = "demo", demoPassword = "demo")
 
         val result = client.generateEmbedding("test text")
         assertTrue("Call must fail", result.isFailure)

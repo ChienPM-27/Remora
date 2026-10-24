@@ -14,11 +14,16 @@ import timber.log.Timber
 class Stage2BatchEvaluator(
     private val client: AiGatewayClient
 ) {
+    /**
+     * Returns:
+     * - Result.success(items): validated items; empty list means a valid negative case.
+     * - Result.failure(cause): recoverable service/network error. Never conflated with the negative case.
+     */
     suspend fun evaluateBatch(
         newCard: MemoryCard,
         candidates: List<MemoryCard>
-    ): List<ResurfacedItem> {
-        if (candidates.isEmpty()) return emptyList()
+    ): Result<List<ResurfacedItem>> {
+        if (candidates.isEmpty()) return Result.success(emptyList())
 
         val candidateMap = candidates.associateBy { it.id }
 
@@ -49,8 +54,9 @@ class Stage2BatchEvaluator(
 
         val responseResult = client.evaluateResurfacing(request)
         if (responseResult.isFailure) {
-            Timber.w("Resurfacing batch request failed")
-            return emptyList()
+            val cause = responseResult.exceptionOrNull()
+            Timber.w("Resurfacing batch request failed (service error): ${cause?.javaClass?.simpleName}")
+            return Result.failure(cause ?: IllegalStateException("Resurfacing batch failed"))
         }
 
         val batchResponse = responseResult.getOrThrow()
@@ -74,7 +80,8 @@ class Stage2BatchEvaluator(
             )
         }
 
-        // Apply strict validation rules: confidence > 0.80, allowed IDs, group-relation compatibility, max 2 items per group
-        return ResurfaceValidator.filterValidItems(rawItems, allowedCandidateIds = candidateMap.keys)
+        // Apply strict validation rules: finite confidence in (0.80, 1], allowed IDs, no duplicate
+        // candidate, group-relation compatibility, max 2 items per group
+        return Result.success(ResurfaceValidator.filterValidItems(rawItems, allowedCandidateIds = candidateMap.keys))
     }
 }

@@ -238,8 +238,17 @@ fun RemoraMainScreen(
                                             .setRequiredNetworkType(NetworkType.CONNECTED)
                                             .build()
                                     )
+                                    .setBackoffCriteria(
+                                        androidx.work.BackoffPolicy.EXPONENTIAL,
+                                        30,
+                                        java.util.concurrent.TimeUnit.SECONDS
+                                    )
                                     .build()
-                                WorkManager.getInstance(context).enqueue(request)
+                                WorkManager.getInstance(context).enqueueUniqueWork(
+                                    CardAnalyzeWorker.uniqueWorkName(cardId),
+                                    androidx.work.ExistingWorkPolicy.REPLACE,
+                                    request
+                                )
                             }
                         },
                         onImportImage = { uri, userIntent ->
@@ -258,8 +267,17 @@ fun RemoraMainScreen(
                                                 .setRequiredNetworkType(NetworkType.CONNECTED)
                                                 .build()
                                         )
+                                        .setBackoffCriteria(
+                                            androidx.work.BackoffPolicy.EXPONENTIAL,
+                                            30,
+                                            java.util.concurrent.TimeUnit.SECONDS
+                                        )
                                         .build()
-                                    WorkManager.getInstance(context).enqueue(request)
+                                    WorkManager.getInstance(context).enqueueUniqueWork(
+                                        CardAnalyzeWorker.uniqueWorkName(cardId),
+                                        androidx.work.ExistingWorkPolicy.REPLACE,
+                                        request
+                                    )
                                     Toast.makeText(context, "Đã thêm thẻ! AI đang xử lý...", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
@@ -315,7 +333,7 @@ fun RemoraMainScreen(
                     val card = MemoryCard(
                         imageUri = uri.toString(),
                         createdAt = System.currentTimeMillis(),
-                        userIntent = intentText.ifBlank { "ôn thi giữa kỳ" },
+                        userIntent = intentText.trim().ifBlank { null },
                         title = "Đang xử lý...",
                         status = ProcessingStatus.PENDING
                     )
@@ -328,9 +346,18 @@ fun RemoraMainScreen(
                                 .setRequiredNetworkType(NetworkType.CONNECTED)
                                 .build()
                         )
+                        .setBackoffCriteria(
+                            androidx.work.BackoffPolicy.EXPONENTIAL,
+                            30,
+                            java.util.concurrent.TimeUnit.SECONDS
+                        )
                         .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to newId))
                         .build()
-                    WorkManager.getInstance(context).enqueue(workRequest)
+                    WorkManager.getInstance(context).enqueueUniqueWork(
+                        CardAnalyzeWorker.uniqueWorkName(newId),
+                        androidx.work.ExistingWorkPolicy.REPLACE,
+                        workRequest
+                    )
                 }
                 activeCaptureUri = null
                 currentTab = MainNavigationTab.TIMELINE
@@ -342,18 +369,16 @@ fun RemoraMainScreen(
             onToggleNotifications = {
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    db.appSettingDao().insertOrUpdate(
-                        AppSettingEntity(id = 1L, notificationsEnabled = false, paused = false)
-                    )
+                    val current = db.appSettingDao().getSetting() ?: AppSettingEntity(id = 1L)
+                    db.appSettingDao().insertOrUpdate(current.copy(notificationsEnabled = false))
                 }
                 activeCaptureUri = null
             },
             onPauseMonitoring = {
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    db.appSettingDao().insertOrUpdate(
-                        AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
-                    )
+                    val current = db.appSettingDao().getSetting() ?: AppSettingEntity(id = 1L)
+                    db.appSettingDao().insertOrUpdate(current.copy(paused = true))
                 }
                 activeCaptureUri = null
             }
