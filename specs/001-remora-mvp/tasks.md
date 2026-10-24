@@ -321,14 +321,13 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 - [x] **T028 [P0] [US5] Implement Resurfacing result processor, Room persistence, and UI Presentation**
   - **File Paths**:
     - `app/src/main/java/com/remora/resurfacing/ResurfacingManager.kt`
-    - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingBanner.kt`
-    - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingDetailDialog.kt`
+    - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingScreen.kt`
     - `app/src/main/java/com/remora/capture/NotificationHelper.kt`
     - `app/src/test/java/com/remora/resurfacing/ResurfacingFlowTest.kt`
   - **Acceptance Criteria**:
     - Triggered automatically by `CardAnalyzeWorker` immediately after card reaches `DONE` status.
     - Validates batch response using invariants from T025; saves to `resurfacing_result` table.
-    - Observes `resurfacingResultDao.getRecentResultsFlow()` in `GalleryViewModel` and presents banner on `RemoraMainScreen`.
+    - Observes `resurfacingResultDao.getLatestSourceCardIdFlow()` in `GalleryViewModel` and presents cards grouped pedagogically on `ResurfacingScreen`.
     - Dispatches high-value notification via `NotificationHelper.showResurfacingAlert`.
     - Shows 3 distinct groups with reasons and benefits; zero popups if result is empty `[]`.
 
