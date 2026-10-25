@@ -335,3 +335,32 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - Khai báo `androidx.room:room-testing:2.6.1` chỉ trong phạm vi `androidTestImplementation` để phục vụ `MigrationTestHelper` kiểm thử migration Room SQLite 1->2. Không làm tăng kích thước hay ảnh hưởng runtime của APK release.
 * **Rút gọn Kiến trúc `applyCaptureAction`:**
   - Rút gọn việc bọc 3 lớp về một hàm duy nhất `CapturePolicy.applyCaptureAction(action, dao, nowMs)`, được gọi trực tiếp bởi `CaptureActionReceiver`, `RemoraMainScreen` và các unit test.
+
+---
+
+## 15. Tối ưu Hoàn thiện Sau Review (Task 8: Deep link Unpinning, Cô lập Lỗi Worker, Ticker ON_RESUME, Settings State) (2026-10-25)
+
+* **1. Deep Link Tab Gợi Nhớ (Unpinning & Lifecycle):**
+  - **Lỗi cũ:** Gọi `selectSourceCard(id)` làm tab Gợi nhớ bị ghim vĩnh viễn vào thẻ đó, không tự cập nhật khi người dùng lưu thẻ mới có kết quả mới. Chạm lại cùng một notification không mở lại tab do state không reset.
+  - **Quyết định kỹ thuật:**
+    - Coi lựa chọn từ notification là dùng một lần: tự động unpin (`selectedSourceCardId.value = null`) khi:
+      1) Người dùng chuyển sang tab khác trong bottom navigation bar (`currentTab != RESURFACE`).
+      2) Có thẻ mới hơn (`latestSourceId > explicitId`) được phân tích và lưu vào cơ sở dữ liệu.
+      3) Thẻ được ghim bị xoá khỏi Room hoặc không còn kết quả gợi nhớ.
+    - Trong `MainActivity.kt`: xoá `resurfacingLaunchTargetCardId = null` ngay sau khi đã gán vào ViewModel, đảm bảo nếu người dùng chạm lại cùng notification thì `LaunchedEffect` vẫn kích hoạt lại.
+* **2. Hoàn lại Thứ tự Worker & Cô lập Lỗi Resurfacing:**
+  - **Lỗi cũ:** Đặt resurfacing trước khi `updateCard(DONE)` khiến dữ liệu trích xuất chỉ nằm trong RAM; nếu worker bị kill/preempt giữa chừng thì mất kết quả và phải gọi lại Gemini từ đầu (tốn quota). `catch (Exception)` còn nuốt cả `CancellationException`.
+  - **Quyết định kỹ thuật:**
+    - Hoàn lại thứ tự chuẩn: lưu thẻ thành `DONE` vào SQLite trước, sau đó mới thực thi pipeline resurfacing.
+    - Bọc resurfacing bằng hàm `executeResurfacingWithIsolation` kèm `withTimeout(30_000L)`. Re-throw `CancellationException` để WorkManager quản lý hủy tiến trình chuẩn xác; chỉ nuốt lỗi nghiệp vụ khác để thẻ vẫn giữ trạng thái `DONE`.
+    - Chống nhấp nháy UI (Heuristic): trong `resolveResurfacingUiState`, nếu thẻ mới nhất là `DONE`, chưa có kết quả và `(nowMs - createdAt) < 90_000L` (90 giây), trả về trạng thái `LATEST_PENDING` ("đang phân tích liên kết tri thức..."). UI sử dụng `LaunchedEffect + delay` để tự động làm mới trạng thái sang `NO_CONFIDENT_LINKS` nếu hết 90 giây mà không có liên kết nào > 0.80.
+* **3. Ticker Hết Hạn Tắt 1 Giờ với `ON_RESUME`:**
+  - **Lỗi cũ:** Coroutine `delay()` sử dụng đồng hồ đơn điệu (monotonic time), nên việc chỉnh giờ hệ thống không kích hoạt ticker. Khi người dùng thu nhỏ app và mở lại sau khi hết giờ, UI có thể không cập nhật ngay.
+  - **Quyết định kỹ thuật:**
+    - Bổ sung `DisposableEffect(lifecycleOwner)` lắng nghe `Lifecycle.Event.ON_RESUME` trên `SettingsScreenContent` để lập tức cập nhật lại `effectiveNowMs = System.currentTimeMillis()`.
+    - Quy trình kiểm thử thủ công: Chờ đủ thời gian thực, hoặc trên bản debug tạm thời đổi hằng số `ONE_HOUR_MS` thành 1 phút (60_000ms). Không kiểm thử bằng cách chỉnh giờ hệ thống.
+* **4. Trạng thái Settings UI (`SettingsUiState`) & Chống Nháy Switch:**
+  - **Lỗi cũ:** `SettingsViewModel.setting` dùng `WhileSubscribed(5000)` với `initialValue = null`, khiến switch ở màn hình Cài đặt rơi vào fallback default (`true`) trong 1 frame đầu tiên trước khi DB emit dữ liệu.
+  - **Quyết định kỹ thuật:**
+    - Định nghĩa `sealed interface SettingsUiState { data object Loading : SettingsUiState; data class Loaded(val setting: AppSettingEntity?) : SettingsUiState }`.
+    - `SettingsScreenContent`: khi `uiState is SettingsUiState.Loading`, không vẽ switch (`if (!isLoading) Switch(...)`), loại bỏ hoàn toàn hiện tượng switch nhấp nháy giá trị mặc định khi cơ sở dữ liệu đang ở trạng thái paused.

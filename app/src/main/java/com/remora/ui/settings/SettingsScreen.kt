@@ -28,6 +28,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,14 +36,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.delay
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.AppSettingEntity
 import com.remora.ui.theme.RemoraBg
@@ -60,9 +64,9 @@ fun SettingsScreen(
     onClearAllCards: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val setting by viewModel.setting.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
     SettingsScreenContent(
-        setting = setting,
+        uiState = uiState,
         onAutoDetectChanged = viewModel::setAutoDetectEnabled,
         onNotificationsChanged = viewModel::setNotificationsEnabled,
         onClearAllCards = onClearAllCards,
@@ -88,7 +92,7 @@ fun SettingsScreen(
 
 @Composable
 fun SettingsScreenContent(
-    setting: AppSettingEntity?,
+    uiState: SettingsUiState,
     onAutoDetectChanged: (Boolean) -> Unit,
     onNotificationsChanged: (Boolean) -> Unit,
     onClearAllCards: () -> Unit,
@@ -98,9 +102,26 @@ fun SettingsScreenContent(
     val scope = rememberCoroutineScope()
     var showConfirmClearDialog by remember { mutableStateOf(false) }
 
+    val setting = (uiState as? SettingsUiState.Loaded)?.setting
+    val isLoading = uiState is SettingsUiState.Loading
+
     val pauseUntil = setting?.pauseUntil ?: 0L
     var effectiveNowMs by remember(pauseUntil, nowMs) {
         mutableStateOf(nowMs ?: System.currentTimeMillis())
+    }
+
+    // Refresh effectiveNowMs when Activity resumes (ON_RESUME)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                effectiveNowMs = nowMs ?: System.currentTimeMillis()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     LaunchedEffect(pauseUntil, nowMs) {
@@ -175,14 +196,16 @@ fun SettingsScreenContent(
                             color = RemoraSubtleText
                         )
                     }
-                    Switch(
-                        checked = autoDetectActive,
-                        onCheckedChange = onAutoDetectChanged,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = RemoraNavyDark
+                    if (!isLoading) {
+                        Switch(
+                            checked = autoDetectActive,
+                            onCheckedChange = onAutoDetectChanged,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = RemoraNavyDark
+                            )
                         )
-                    )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -206,14 +229,16 @@ fun SettingsScreenContent(
                             color = RemoraSubtleText
                         )
                     }
-                    Switch(
-                        checked = notificationsActive,
-                        onCheckedChange = onNotificationsChanged,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = RemoraNavyDark
+                    if (!isLoading) {
+                        Switch(
+                            checked = notificationsActive,
+                            onCheckedChange = onNotificationsChanged,
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = RemoraNavyDark
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -350,3 +375,20 @@ fun SettingsScreenContent(
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
+
+@Composable
+fun SettingsScreenContent(
+    setting: AppSettingEntity?,
+    onAutoDetectChanged: (Boolean) -> Unit,
+    onNotificationsChanged: (Boolean) -> Unit,
+    onClearAllCards: () -> Unit,
+    modifier: Modifier = Modifier,
+    nowMs: Long? = null
+) = SettingsScreenContent(
+    uiState = SettingsUiState.Loaded(setting),
+    onAutoDetectChanged = onAutoDetectChanged,
+    onNotificationsChanged = onNotificationsChanged,
+    onClearAllCards = onClearAllCards,
+    modifier = modifier,
+    nowMs = nowMs
+)

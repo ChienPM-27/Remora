@@ -31,10 +31,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -112,17 +114,20 @@ fun groupForDisplay(items: List<ResurfacedItem>): List<ResurfacingDisplayGroup> 
     }
 }
 
+const val RESURFACING_ANALYZING_WINDOW_MS = 90_000L
+
 /**
  * Resolves the active UI state for the Resurfacing tab cleanly distinguishing:
  * - NO_CARDS: No cards stored in the database yet.
- * - LATEST_PENDING: The latest card is currently being analyzed by AI.
+ * - LATEST_PENDING: The latest card is currently being analyzed by AI (or in 90s resurfacing window).
  * - NO_CONFIDENT_LINKS: Card completed, but no confident links found (> 0.80).
  * - Active results: Source card and its corresponding items.
  */
 fun resolveResurfacingUiState(
     sourceCard: MemoryCard?,
     items: List<ResurfacedItem>,
-    latestCard: MemoryCard?
+    latestCard: MemoryCard?,
+    nowMs: Long = System.currentTimeMillis()
 ): ResurfacingUiState {
     val effectiveSourceCard = sourceCard
 
@@ -153,10 +158,11 @@ fun resolveResurfacingUiState(
     )
 
     if (isLatestNewerThanSource) {
-        val emptyReason = if (latestCard.status == ProcessingStatus.FAILED) {
-            ResurfacingEmptyReason.LATEST_FAILED
-        } else {
-            ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+        val emptyReason = when {
+            latestCard.status == ProcessingStatus.FAILED -> ResurfacingEmptyReason.LATEST_FAILED
+            latestCard.status == ProcessingStatus.DONE && (nowMs - latestCard.createdAt) in 0 until RESURFACING_ANALYZING_WINDOW_MS ->
+                ResurfacingEmptyReason.LATEST_PENDING
+            else -> ResurfacingEmptyReason.NO_CONFIDENT_LINKS
         }
         return ResurfacingUiState(
             headerCard = latestCard,
@@ -177,10 +183,11 @@ fun resolveResurfacingUiState(
                 emptyReason = null
             )
         } else {
-            val emptyReason = if (effectiveSourceCard.status == ProcessingStatus.FAILED) {
-                ResurfacingEmptyReason.LATEST_FAILED
-            } else {
-                ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+            val emptyReason = when {
+                effectiveSourceCard.status == ProcessingStatus.FAILED -> ResurfacingEmptyReason.LATEST_FAILED
+                effectiveSourceCard.status == ProcessingStatus.DONE && (nowMs - effectiveSourceCard.createdAt) in 0 until RESURFACING_ANALYZING_WINDOW_MS ->
+                    ResurfacingEmptyReason.LATEST_PENDING
+                else -> ResurfacingEmptyReason.NO_CONFIDENT_LINKS
             }
             ResurfacingUiState(
                 headerCard = effectiveSourceCard,
@@ -198,10 +205,11 @@ fun resolveResurfacingUiState(
         "Bài học vừa lưu"
     }
 
-    val emptyReason = if (latestCard?.status == ProcessingStatus.FAILED) {
-        ResurfacingEmptyReason.LATEST_FAILED
-    } else {
-        ResurfacingEmptyReason.NO_CONFIDENT_LINKS
+    val emptyReason = when {
+        latestCard?.status == ProcessingStatus.FAILED -> ResurfacingEmptyReason.LATEST_FAILED
+        latestCard?.status == ProcessingStatus.DONE && (nowMs - latestCard.createdAt) in 0 until RESURFACING_ANALYZING_WINDOW_MS ->
+            ResurfacingEmptyReason.LATEST_PENDING
+        else -> ResurfacingEmptyReason.NO_CONFIDENT_LINKS
     }
 
     return ResurfacingUiState(
@@ -226,16 +234,36 @@ fun ResurfacingScreen(
     items: List<ResurfacedItem> = emptyList(),
     sourceCard: MemoryCard? = null,
     latestCard: MemoryCard? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    nowMs: Long? = null
 ) {
     var selectedCard by remember { mutableStateOf<MemoryCard?>(null) }
+    var effectiveNowMs by remember(nowMs) {
+        mutableStateOf(nowMs ?: System.currentTimeMillis())
+    }
 
-    val uiState = remember(items, sourceCard, latestCard) {
+    val uiState = remember(items, sourceCard, latestCard, effectiveNowMs) {
         resolveResurfacingUiState(
             sourceCard = sourceCard,
             items = items,
-            latestCard = latestCard
+            latestCard = latestCard,
+            nowMs = effectiveNowMs
         )
+    }
+
+    // Heuristic: If latest card is DONE within 90s window and currently in LATEST_PENDING,
+    // delay until window expiry and then update effectiveNowMs to refresh UI state.
+    if (uiState.emptyReason == ResurfacingEmptyReason.LATEST_PENDING && uiState.headerCard?.status == ProcessingStatus.DONE) {
+        val cardCreatedAt = uiState.headerCard.createdAt
+        val remaining = RESURFACING_ANALYZING_WINDOW_MS - (effectiveNowMs - cardCreatedAt)
+        if (remaining > 0) {
+            LaunchedEffect(cardCreatedAt, nowMs) {
+                if (nowMs == null) {
+                    delay(remaining + 50L)
+                    effectiveNowMs = System.currentTimeMillis()
+                }
+            }
+        }
     }
 
     val displayGroups = remember(uiState.items) {

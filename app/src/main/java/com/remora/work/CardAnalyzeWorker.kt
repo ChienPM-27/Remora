@@ -17,7 +17,11 @@ import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.util.ImageCompressor
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
+
+const val RESURFACING_TIMEOUT_MS = 30_000L
 
 class CardAnalyzeWorker(
     appContext: Context,
@@ -82,7 +86,7 @@ class CardAnalyzeWorker(
             val rawEmbedding = embeddingResult.getOrThrow().toFloatArray()
             val normalizedEmbedding = VectorMath.l2Normalize(rawEmbedding)
 
-            // 5. Update Room database to DONE
+            // 5. Update Room database to DONE first so extraction result is never lost if resurfacing fails or cancels
             val updatedCard = card.copy(
                 title = extracted.title.take(80),
                 summary = extracted.summary,
@@ -93,34 +97,33 @@ class CardAnalyzeWorker(
                 status = ProcessingStatus.DONE,
                 errorCode = null
             )
+            db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
+            Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
 
-            // 6. Trigger Resurfacing pipeline and save results to Room before marking card as DONE
-            // This guarantees resurfacing results are already persisted when observers see card transition to DONE, eliminating UI flicker.
+            // 6. Trigger Resurfacing pipeline with isolated error handling and timeout
             val resurfacingManager = remoraApp?.container?.resurfacingManager
             if (resurfacingManager != null && updatedCard.embedding != null) {
-                try {
-                    val resurfacedItems = resurfacingManager.runResurfacingPipeline(updatedCard)
+                executeResurfacingWithIsolation(updatedCard) { targetCard ->
+                    val resurfacedItems = resurfacingManager.runResurfacingPipeline(targetCard)
                     if (resurfacedItems.isNotEmpty()) {
                         val setting = db.appSettingDao().getSetting()
                         if (CapturePolicy.shouldShowResurfacingAlert(setting)) {
                             NotificationHelper.showResurfacingAlert(
                                 context = applicationContext,
-                                sourceCardTitle = updatedCard.title,
+                                sourceCardTitle = targetCard.title,
                                 resurfacedItems = resurfacedItems,
-                                newCardId = updatedCard.id
+                                newCardId = targetCard.id
                             )
                         }
                     }
-                } catch (resurfaceEx: Exception) {
-                    Timber.w(resurfaceEx, "Resurfacing pipeline failed silently without breaking card DONE status")
                 }
             }
 
-            db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
-            Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
-
             return Result.success()
 
+        } catch (e: CancellationException) {
+            Timber.w("CardAnalyzeWorker cancelled for card #$cardId")
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Unexpected exception analyzing MemoryCard #$cardId")
             return handleFailure(db, card, e)
@@ -172,5 +175,27 @@ class CardAnalyzeWorker(
     companion object {
         const val KEY_CARD_ID = "key_card_id"
         const val MAX_RETRIES = 3
+    }
+}
+
+/**
+ * Isolated runner for resurfacing pipeline with strict timeout and exception isolation.
+ * Re-throws [CancellationException] to honor coroutine cancellation.
+ * Swallows standard exceptions so a resurfacing failure never invalidates an already-completed [ProcessingStatus.DONE] card.
+ */
+internal suspend fun executeResurfacingWithIsolation(
+    card: MemoryCard,
+    timeoutMs: Long = RESURFACING_TIMEOUT_MS,
+    runPipeline: suspend (MemoryCard) -> Unit
+) {
+    try {
+        withTimeout(timeoutMs) {
+            runPipeline(card)
+        }
+    } catch (e: CancellationException) {
+        Timber.w("Resurfacing pipeline cancelled for card #${card.id}")
+        throw e
+    } catch (e: Exception) {
+        Timber.w(e, "Resurfacing pipeline failed silently; card #${card.id} remains DONE")
     }
 }

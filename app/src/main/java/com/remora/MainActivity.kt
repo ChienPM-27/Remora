@@ -161,8 +161,10 @@ class MainActivity : ComponentActivity() {
 
                     // Side-effect: When notification opens a specific card, focus that card's resurfacing results
                     LaunchedEffect(resurfacingLaunchTargetCardId) {
-                        resurfacingLaunchTargetCardId?.let { targetCardId ->
+                        val targetCardId = resurfacingLaunchTargetCardId
+                        if (targetCardId != null) {
                             galleryViewModel.selectSourceCard(targetCardId)
+                            resurfacingLaunchTargetCardId = null
                         }
                     }
 
@@ -188,7 +190,12 @@ class MainActivity : ComponentActivity() {
                             settingsViewModel = settingsViewModel,
                             initialCaptureUri = initialCaptureUri,
                             initialTab = initialTab,
-                            onTabSelected = { initialTab = it }
+                            onTabSelected = { tab ->
+                                if (tab != MainNavigationTab.RESURFACE) {
+                                    galleryViewModel.selectSourceCard(null)
+                                }
+                                initialTab = tab
+                            }
                         )
                     }
                 }

@@ -8,6 +8,7 @@ import com.remora.data.local.entity.AppSettingEntity
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -54,9 +55,22 @@ fun formatAutoDetectStatusSubtitle(
     return DEFAULT_AUTO_DETECT_SUBTITLE
 }
 
+sealed interface SettingsUiState {
+    data object Loading : SettingsUiState
+    data class Loaded(val setting: AppSettingEntity?) : SettingsUiState
+}
+
 class SettingsViewModel(
     private val appSettingDao: AppSettingDao
 ) : ViewModel() {
+
+    val uiState: StateFlow<SettingsUiState> = appSettingDao.getSettingFlow()
+        .map<AppSettingEntity?, SettingsUiState> { SettingsUiState.Loaded(it) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = SettingsUiState.Loading
+        )
 
     val setting: StateFlow<AppSettingEntity?> = appSettingDao.getSettingFlow()
         .stateIn(

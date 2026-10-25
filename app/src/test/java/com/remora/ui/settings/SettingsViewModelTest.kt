@@ -111,6 +111,40 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun uiState_sequence_loadingToLoadedNullToLoadedPaused() = runTest {
+        val fakeDao = FakeAppSettingDao(initialSetting = null)
+        val viewModel = SettingsViewModel(fakeDao)
+
+        // Before collection starts, state is strictly Loading
+        assertEquals(SettingsUiState.Loading, viewModel.uiState.value)
+
+        // Start collection
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Emits Loaded(null) when DB is empty
+        assertEquals(SettingsUiState.Loaded(null), viewModel.uiState.value)
+
+        // DB updates to paused
+        val pausedSetting = AppSettingEntity(
+            consentGranted = true,
+            notificationsEnabled = false,
+            paused = true,
+            pauseUntil = 0L
+        )
+        fakeDao.setting = pausedSetting
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Emits Loaded(pausedSetting)
+        assertEquals(SettingsUiState.Loaded(pausedSetting), viewModel.uiState.value)
+        val loaded = viewModel.uiState.value as SettingsUiState.Loaded
+        assertTrue("Setting should be paused", loaded.setting!!.paused)
+        assertFalse("Notifications should be disabled", loaded.setting!!.notificationsEnabled)
+    }
+
+    @Test
     fun setAutoDetectEnabled_whenFalse_setsPausedTrue() = runTest {
         val fakeDao = FakeAppSettingDao(
             initialSetting = AppSettingEntity(

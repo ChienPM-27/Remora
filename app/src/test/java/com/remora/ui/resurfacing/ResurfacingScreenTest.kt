@@ -322,4 +322,52 @@ class ResurfacingScreenTest {
         assertTrue(state.items.isEmpty())
         assertEquals(8L, state.headerCard?.id)
     }
+
+    @Test
+    fun resolveResurfacingUiState_doneCardWithin90sWindow_returnsLatestPending() {
+        val baseTime = 1_000_000L
+        val doneCard = createTestCard(
+            id = 9L,
+            title = "Bài học vừa phân tích xong",
+            status = ProcessingStatus.DONE,
+            createdAt = baseTime
+        )
+
+        // 30 seconds after card creation (< 90 seconds)
+        val state = resolveResurfacingUiState(
+            sourceCard = doneCard,
+            items = emptyList(),
+            latestCard = doneCard,
+            nowMs = baseTime + 30_000L
+        )
+
+        assertEquals(ResurfacingEmptyReason.LATEST_PENDING, state.emptyReason)
+        assertEquals("Bài học vừa phân tích xong", state.headerTitle)
+        assertTrue(state.items.isEmpty())
+        assertEquals(9L, state.headerCard?.id)
+    }
+
+    @Test
+    fun resolveResurfacingUiState_doneCardOutside90sWindow_returnsNoConfidentLinks() {
+        val baseTime = 1_000_000L
+        val doneCard = createTestCard(
+            id = 10L,
+            title = "Bài học đã phân tích lâu rồi",
+            status = ProcessingStatus.DONE,
+            createdAt = baseTime
+        )
+
+        // 95 seconds after card creation (> 90 seconds)
+        val state = resolveResurfacingUiState(
+            sourceCard = doneCard,
+            items = emptyList(),
+            latestCard = doneCard,
+            nowMs = baseTime + 95_000L
+        )
+
+        assertEquals(ResurfacingEmptyReason.NO_CONFIDENT_LINKS, state.emptyReason)
+        assertEquals("Bài học đã phân tích lâu rồi", state.headerTitle)
+        assertTrue(state.items.isEmpty())
+        assertEquals(10L, state.headerCard?.id)
+    }
 }
