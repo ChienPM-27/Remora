@@ -115,6 +115,8 @@ class ResurfacingFlowTest {
             override suspend fun updateCard(card: MemoryCardEntity) {}
             override suspend fun deleteCard(id: Long) {}
             override suspend fun getCardById(id: Long): MemoryCardEntity? = null
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = null
+            override suspend fun countCardsByImageUri(imageUri: String): Int = 0
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()

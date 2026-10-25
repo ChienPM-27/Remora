@@ -22,12 +22,12 @@ object CaptureActionHandler {
         memoryCardDao: com.remora.data.local.dao.MemoryCardDao,
         onEnqueueWorker: (Long) -> Unit = {},
         onApplyCaptureAction: suspend (String) -> Unit = {},
+        onSaveSuccess: () -> Unit = {},
         onResolve: (String) -> Unit
     ) {
-        if (imageUriStr == null) return
-
         when (action) {
             NotificationHelper.ACTION_SAVE -> {
+                if (imageUriStr == null) return
                 val existingCard = memoryCardDao.getCardByImageUri(imageUriStr)
                 if (existingCard != null) {
                     Timber.i("MemoryCard for uri $imageUriStr already exists (#${existingCard.id}), skipping duplicate insert")
@@ -43,10 +43,12 @@ object CaptureActionHandler {
                     Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
                     onEnqueueWorker(newId)
                 }
+                onSaveSuccess()
                 onResolve(imageUriStr)
             }
 
             NotificationHelper.ACTION_SKIP -> {
+                if (imageUriStr == null) return
                 Timber.i("User skipped screenshot saving. Zero data leaves device.")
                 onResolve(imageUriStr)
             }
@@ -55,7 +57,9 @@ object CaptureActionHandler {
             NotificationHelper.ACTION_PAUSE -> {
                 onApplyCaptureAction(action)
                 Timber.i("Screenshot capture action applied: $action")
-                onResolve(imageUriStr)
+                if (imageUriStr != null) {
+                    onResolve(imageUriStr)
+                }
             }
         }
     }
@@ -67,9 +71,7 @@ class CaptureActionReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         Timber.i("CaptureActionReceiver received action: $action")
 
-        if (action == NotificationHelper.ACTION_SAVE) {
-            NotificationHelper.showSaveSuccess(context)
-        } else {
+        if (action != NotificationHelper.ACTION_SAVE) {
             NotificationHelper.dismissNotification(context)
         }
 
@@ -105,6 +107,9 @@ class CaptureActionReceiver : BroadcastReceiver() {
                         onApplyCaptureAction = { act ->
                             CapturePolicy.applyCaptureAction(act, db.appSettingDao(), System.currentTimeMillis())
                         },
+                        onSaveSuccess = {
+                            NotificationHelper.showSaveSuccess(context)
+                        },
                         onResolve = { uri ->
                             PendingCaptureStore.getInstance(context).resolve(uri)
                         }
@@ -112,6 +117,7 @@ class CaptureActionReceiver : BroadcastReceiver() {
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error or timeout in CaptureActionReceiver")
+                NotificationHelper.dismissNotification(context)
             } finally {
                 pendingResult.finish()
             }

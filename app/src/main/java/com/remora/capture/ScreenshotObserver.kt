@@ -182,6 +182,20 @@ class ScreenshotObserver(
 
     companion object {
         private const val MAX_FALLBACK_AGE_SECONDS = 45L
+        const val MAX_SCREEN_CAPTURE_CALLBACK_AGE_SECONDS = 15L
+
+        /**
+         * Pure function to determine if an image's dateAdded timestamp falls within [maxAgeSeconds].
+         * Includes a tolerance of 10s into the future for possible clock skew.
+         */
+        fun isWithinMaxAge(
+            dateAddedSeconds: Long,
+            nowSeconds: Long = System.currentTimeMillis() / 1000L,
+            maxAgeSeconds: Long = MAX_SCREEN_CAPTURE_CALLBACK_AGE_SECONDS
+        ): Boolean {
+            val ageSeconds = nowSeconds - dateAddedSeconds
+            return ageSeconds in -10L..maxAgeSeconds
+        }
 
         fun isScreenshot(path: String, name: String): Boolean {
             val lowerPath = path.lowercase()
@@ -193,11 +207,16 @@ class ScreenshotObserver(
                     lowerName.contains("chụp màn")
         }
 
-        fun queryLatestScreenshotUri(context: Context): Uri? {
+        fun queryLatestScreenshotUri(
+            context: Context,
+            maxAgeSeconds: Long = MAX_SCREEN_CAPTURE_CALLBACK_AGE_SECONDS,
+            nowSeconds: Long = System.currentTimeMillis() / 1000L
+        ): Uri? {
             try {
                 val projection = arrayOf(
                     MediaStore.Images.Media._ID,
                     MediaStore.Images.Media.DISPLAY_NAME,
+                    MediaStore.Images.Media.DATE_ADDED,
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) MediaStore.Images.Media.RELATIVE_PATH else MediaStore.Images.Media.DATA
                 )
                 val sortOrder = "${MediaStore.Images.Media.DATE_ADDED} DESC, ${MediaStore.Images.Media._ID} DESC"
@@ -211,8 +230,10 @@ class ScreenshotObserver(
                     if (cursor.moveToFirst()) {
                         val idCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
                         val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+                        val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_ADDED)
                         val id = cursor.getLong(idCol)
                         val name = cursor.getString(nameCol) ?: ""
+                        val dateAdded = cursor.getLong(dateAddedCol)
                         val pathCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                             cursor.getColumnIndex(MediaStore.Images.Media.RELATIVE_PATH)
                         } else {
@@ -220,8 +241,10 @@ class ScreenshotObserver(
                         }
                         val path = if (pathCol != -1) cursor.getString(pathCol) ?: "" else ""
 
-                        if (isScreenshot(path, name)) {
+                        if (isScreenshot(path, name) && isWithinMaxAge(dateAdded, nowSeconds, maxAgeSeconds)) {
                             return ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+                        } else {
+                            Timber.d("Latest media row #$id rejected: isScreenshot=${isScreenshot(path, name)}, isWithinMaxAge=${isWithinMaxAge(dateAdded, nowSeconds, maxAgeSeconds)} (age=${nowSeconds - dateAdded}s)")
                         }
                     }
                 }

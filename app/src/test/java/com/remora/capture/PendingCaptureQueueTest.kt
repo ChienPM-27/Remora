@@ -228,4 +228,196 @@ class PendingCaptureQueueTest {
         val allInDb = PendingCaptureQueue.nextPromptUri(queue) { true }
         assertNull(allInDb)
     }
+
+    // 10. Mục 1: So sánh tuổi ảnh thuần (isWithinMaxAge)
+    @Test
+    fun isWithinMaxAge_within15Seconds_returnsTrue() {
+        val now = 100_000L
+        assertTrue(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now, nowSeconds = now, maxAgeSeconds = 15L))
+        assertTrue(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now - 14L, nowSeconds = now, maxAgeSeconds = 15L))
+        assertTrue(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now - 15L, nowSeconds = now, maxAgeSeconds = 15L))
+    }
+
+    @Test
+    fun isWithinMaxAge_olderThan15Seconds_returnsFalse() {
+        val now = 100_000L
+        assertFalse(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now - 16L, nowSeconds = now, maxAgeSeconds = 15L))
+        assertFalse(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now - 3600L, nowSeconds = now, maxAgeSeconds = 15L))
+    }
+
+    @Test
+    fun isWithinMaxAge_clockSkewTolerance() {
+        val now = 100_000L
+        // 5s into the future (skew within 10s) -> allowed
+        assertTrue(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now + 5L, nowSeconds = now, maxAgeSeconds = 15L))
+        // 15s into the future (skew beyond 10s) -> rejected
+        assertFalse(ScreenshotObserver.isWithinMaxAge(dateAddedSeconds = now + 15L, nowSeconds = now, maxAgeSeconds = 15L))
+    }
+
+    // 11. Mục 2: MUTE_1H và PAUSE với URI null vẫn gọi onApplyCaptureAction; có URI thì resolve
+    @Test
+    fun captureActionHandler_mute1h_withNullUri_appliesActionWithoutResolving() = runTest {
+        val fakeDao = FakeMemoryCardDao()
+        var appliedAction: String? = null
+        var resolvedUri: String? = null
+
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_MUTE_1H,
+            imageUriStr = null,
+            userIntent = null,
+            memoryCardDao = fakeDao,
+            onApplyCaptureAction = { appliedAction = it },
+            onResolve = { resolvedUri = it }
+        )
+
+        assertEquals(NotificationHelper.ACTION_MUTE_1H, appliedAction)
+        assertNull(resolvedUri)
+    }
+
+    @Test
+    fun captureActionHandler_pause_withNullUri_appliesActionWithoutResolving() = runTest {
+        val fakeDao = FakeMemoryCardDao()
+        var appliedAction: String? = null
+        var resolvedUri: String? = null
+
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_PAUSE,
+            imageUriStr = null,
+            userIntent = null,
+            memoryCardDao = fakeDao,
+            onApplyCaptureAction = { appliedAction = it },
+            onResolve = { resolvedUri = it }
+        )
+
+        assertEquals(NotificationHelper.ACTION_PAUSE, appliedAction)
+        assertNull(resolvedUri)
+    }
+
+    @Test
+    fun captureActionHandler_mute1h_withValidUri_appliesActionAndResolves() = runTest {
+        val fakeDao = FakeMemoryCardDao()
+        val uri = "content://media/external/images/media/55"
+        var appliedAction: String? = null
+        var resolvedUri: String? = null
+
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_MUTE_1H,
+            imageUriStr = uri,
+            userIntent = null,
+            memoryCardDao = fakeDao,
+            onApplyCaptureAction = { appliedAction = it },
+            onResolve = { resolvedUri = it }
+        )
+
+        assertEquals(NotificationHelper.ACTION_MUTE_1H, appliedAction)
+        assertEquals(uri, resolvedUri)
+    }
+
+    @Test
+    fun captureActionHandler_pause_withValidUri_appliesActionAndResolves() = runTest {
+        val fakeDao = FakeMemoryCardDao()
+        val uri = "content://media/external/images/media/56"
+        var appliedAction: String? = null
+        var resolvedUri: String? = null
+
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_PAUSE,
+            imageUriStr = uri,
+            userIntent = null,
+            memoryCardDao = fakeDao,
+            onApplyCaptureAction = { appliedAction = it },
+            onResolve = { resolvedUri = it }
+        )
+
+        assertEquals(NotificationHelper.ACTION_PAUSE, appliedAction)
+        assertEquals(uri, resolvedUri)
+    }
+
+    @Test
+    fun captureActionHandler_saveAndSkip_withNullUri_ignored() = runTest {
+        val fakeDao = FakeMemoryCardDao()
+        var saveSuccessCalled = false
+        var resolvedUri: String? = null
+
+        // SAVE with null URI
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_SAVE,
+            imageUriStr = null,
+            userIntent = "test",
+            memoryCardDao = fakeDao,
+            onSaveSuccess = { saveSuccessCalled = true },
+            onResolve = { resolvedUri = it }
+        )
+        assertFalse(saveSuccessCalled)
+        assertNull(resolvedUri)
+        assertEquals(0, fakeDao.cards.size)
+
+        // SKIP with null URI
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_SKIP,
+            imageUriStr = null,
+            userIntent = null,
+            memoryCardDao = fakeDao,
+            onResolve = { resolvedUri = it }
+        )
+        assertNull(resolvedUri)
+    }
+
+    @Test
+    fun captureActionHandler_save_callsSaveSuccessOnInsertAndWhenCardExists() = runTest {
+        val fakeDao = FakeMemoryCardDao()
+        val uri = "content://media/external/images/media/77"
+        var saveSuccessCount = 0
+        var resolvedUri: String? = null
+
+        // 1st call: inserts new card and triggers onSaveSuccess
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_SAVE,
+            imageUriStr = uri,
+            userIntent = "Toán 10",
+            memoryCardDao = fakeDao,
+            onSaveSuccess = { saveSuccessCount++ },
+            onResolve = { resolvedUri = it }
+        )
+        assertEquals(1, saveSuccessCount)
+        assertEquals(uri, resolvedUri)
+        assertEquals(1, fakeDao.cards.size)
+
+        // 2nd call: card exists, skips duplicate insert, still calls onSaveSuccess and resolves
+        resolvedUri = null
+        CaptureActionHandler.handleAction(
+            action = NotificationHelper.ACTION_SAVE,
+            imageUriStr = uri,
+            userIntent = "Toán 10",
+            memoryCardDao = fakeDao,
+            onSaveSuccess = { saveSuccessCount++ },
+            onResolve = { resolvedUri = it }
+        )
+        assertEquals(2, saveSuccessCount)
+        assertEquals(uri, resolvedUri)
+        assertEquals(1, fakeDao.cards.size)
+    }
+
+    // 12. Mục 4: Prune khi RESUMED với danh sách có mục quá hạn (>24 giờ)
+    @Test
+    fun pruneExpired_whenResumedWithExpiredItems_removesExpiredAndKeepsValid() {
+        val now = TimeUnit.HOURS.toMillis(100)
+        val ttlMs = TimeUnit.HOURS.toMillis(24)
+
+        val queue = listOf(
+            PendingCapture("content://media/valid_1", now - TimeUnit.HOURS.toMillis(1)),
+            PendingCapture("content://media/expired_1", now - TimeUnit.HOURS.toMillis(25)),
+            PendingCapture("content://media/valid_2", now - TimeUnit.HOURS.toMillis(23)),
+            PendingCapture("content://media/expired_2", now - TimeUnit.HOURS.toMillis(50)),
+            PendingCapture("content://media/exact_boundary", now - ttlMs),
+            PendingCapture("content://media/just_expired", now - ttlMs - 1L)
+        )
+
+        val pruned = PendingCaptureQueue.pruneExpired(queue, now)
+        assertEquals(3, pruned.size)
+        assertEquals(
+            listOf("content://media/valid_1", "content://media/valid_2", "content://media/exact_boundary"),
+            pruned.map { it.uriString }
+        )
+    }
 }

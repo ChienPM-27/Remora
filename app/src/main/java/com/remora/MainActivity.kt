@@ -138,10 +138,10 @@ class MainActivity : ComponentActivity() {
 
                     // Small delay to allow MediaStore write completion
                     delay(500L)
-                    val uri = ScreenshotObserver.queryLatestScreenshotUri(applicationContext)
+                    val uri = ScreenshotObserver.queryLatestScreenshotUri(applicationContext, maxAgeSeconds = 15L)
                     if (uri != null) {
-                        Timber.i("Found screenshot uri from ScreenCaptureCallback: $uri")
-                        PendingCaptureStore.getInstance(applicationContext).markPending(uri, prioritize = true)
+                        Timber.i("Found fresh screenshot uri from ScreenCaptureCallback: $uri")
+                        PendingCaptureStore.getInstance(applicationContext).markPending(uri, prioritize = false)
                     }
                 }
             }

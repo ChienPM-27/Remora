@@ -69,6 +69,8 @@ class GalleryViewModelTest {
         override suspend fun updateCard(card: MemoryCardEntity) {}
         override suspend fun deleteCard(id: Long) {}
         override suspend fun getCardById(id: Long): MemoryCardEntity? = null
+        override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = null
+        override suspend fun countCardsByImageUri(imageUri: String): Int = 0
         override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
         override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
         override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -197,6 +199,8 @@ class GalleryViewModelTest {
             override suspend fun updateCard(card: MemoryCardEntity) { cardsMap[card.id] = card }
             override suspend fun deleteCard(id: Long) { cardsMap.remove(id) }
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
+            override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(cardsMap.values.toList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -295,6 +299,8 @@ class GalleryViewModelTest {
             override suspend fun updateCard(card: MemoryCardEntity) {}
             override suspend fun deleteCard(id: Long) {}
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
+            override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -350,6 +356,8 @@ class GalleryViewModelTest {
             override suspend fun updateCard(card: MemoryCardEntity) {}
             override suspend fun deleteCard(id: Long) {}
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
+            override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -443,6 +451,8 @@ class GalleryViewModelTest {
             override suspend fun updateCard(card: MemoryCardEntity) {}
             override suspend fun deleteCard(id: Long) {}
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
+            override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -531,6 +541,8 @@ class GalleryViewModelTest {
             override suspend fun updateCard(card: MemoryCardEntity) {}
             override suspend fun deleteCard(id: Long) {}
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
+            override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -615,6 +627,8 @@ class GalleryViewModelTest {
             override suspend fun updateCard(card: MemoryCardEntity) {}
             override suspend fun deleteCard(id: Long) {}
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
+            override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
+            override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()

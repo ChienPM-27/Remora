@@ -102,6 +102,7 @@ fun RemoraMainScreen(
     // Observe pending captures reactively only when RESUMED
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            store.prune()
             store.pending.collect { pendingList ->
                 // If active prompt is no longer in pending list (e.g. resolved externally), clear it
                 if (activePromptUri != null && pendingList.none { it.uriString == activePromptUri.toString() }) {

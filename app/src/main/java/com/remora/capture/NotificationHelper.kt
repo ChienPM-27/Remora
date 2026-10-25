@@ -42,6 +42,7 @@ object NotificationHelper {
 
     const val CHANNEL_ID = "remora_capture_channel"
     const val RESURFACING_CHANNEL_ID = "remora_resurfacing_channel"
+    const val STATUS_CHANNEL_ID = "remora_status_channel"
     const val NOTIFICATION_ID = 1001
     const val RESURFACING_NOTIFICATION_ID = 2001
     const val RESURFACING_REQUEST_CODE = 200
@@ -78,6 +79,17 @@ object NotificationHelper {
                 description = "Proactive alerts when new card links to previous study knowledge"
             }
             notificationManager.createNotificationChannel(resurfaceChannel)
+
+            val statusChannel = NotificationChannel(
+                STATUS_CHANNEL_ID,
+                "Remora Status",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Silent confirmations and processing status"
+                enableVibration(false)
+                setShowBadge(false)
+            }
+            notificationManager.createNotificationChannel(statusChannel)
         }
     }
 
@@ -335,7 +347,8 @@ object NotificationHelper {
     }
 
     fun showSaveSuccess(context: Context) {
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        createNotificationChannel(context)
+        val notification = NotificationCompat.Builder(context, STATUS_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("Đã lưu vào Remora")
             .setContentText("AI đang phân tích bài học...")

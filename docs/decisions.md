@@ -414,3 +414,25 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - `RemoraMainScreen` chỉ kích hoạt kiểm tra và hiển thị sheet khi lifecycle ở trạng thái `RESUMED` (`repeatOnLifecycle(Lifecycle.State.RESUMED)`).
   - Trước khi hiện sheet cho bất kỳ URI nào, kiểm tra `memoryCardDao.countCardsByImageUri(uriString) > 0` hoặc ảnh không thể đọc (`openInputStream(uri) == null`). Nếu đã có thẻ hoặc ảnh hỏng/bị xoá, lập tức gọi `store.resolve(uri)` và chuyển sang ảnh kế tiếp trong hàng đợi.
   - Khi một sheet được giải quyết (Lưu/Bỏ qua), `store.pending` tự động phát danh sách mới, UI lập tức hiển thị sheet cho ảnh tiếp theo nếu còn trong hàng đợi (ưu tiên ảnh mới nhất).
+
+---
+
+## 18. Tinh chỉnh Luồng Capture & Notification Kênh Riêng (Task 11) (2026-10-25)
+
+* **1. Giới hạn Tuổi Ảnh cho `ScreenCaptureCallback` (`MAX_SCREEN_CAPTURE_CALLBACK_AGE_SECONDS = 15s`):**
+  - Android 14+ `ScreenCaptureCallback` chỉ thông báo có sự kiện chụp màn hình mà không truyền kèm URI. App phải truy vấn `MediaStore` để lấy ảnh mới nhất.
+  - Nhằm tránh kéo lại ảnh cũ từ nhiều ngày trước nếu hệ thống phát callback muộn hoặc khi mở app, `queryLatestScreenshotUri` bổ sung tham số `maxAgeSeconds` (mặc định 15 giây) và kiểm tra bằng hàm thuần `isWithinMaxAge(dateAddedSeconds, nowSeconds, maxAgeSeconds)`.
+  - Nhánh callback này không đặt `prioritize = true` để giữ đúng thứ tự hàng đợi tự nhiên.
+
+* **2. Phân tách Ràng buộc URI trong `CaptureActionHandler`:**
+  - `ACTION_SAVE` và `ACTION_SKIP`: Bắt buộc cần `imageUriStr` hợp lệ (nếu null thì bỏ qua không thực hiện).
+  - `ACTION_MUTE_1H` và `ACTION_PAUSE`: Áp dụng chính sách chụp màn hình ngay lập tức (`onApplyCaptureAction`) kể cả khi `imageUriStr` là `null` (ví dụ intent từ widget hoặc shortcut không gắn URI). Chỉ gọi `onResolve(imageUriStr)` khi URI khác null.
+
+* **3. Notification Báo Lưu Thành công (`showSaveSuccess`) Kênh Riêng:**
+  - Không gọi `showSaveSuccess` ngay đầu `onReceive` của `CaptureActionReceiver`. Chỉ gọi sau khi insert thẻ vào Room SQLite thành công (hoặc khi phát hiện thẻ đã tồn tại). Nếu insert bị lỗi hoặc timeout, không báo thành công mà chỉ dọn notification để tránh thông báo sai lệch cho người dùng.
+  - Sử dụng kênh riêng `STATUS_CHANNEL_ID = "remora_status_channel"` với `importance = NotificationManager.IMPORTANCE_LOW`.
+  - Kênh này tắt rung (`enableVibration = false`), không hiện huy hiệu ứng dụng (`setShowBadge = false`) và không kích hoạt banner dạng heads-up.
+  - **Lý do loại bỏ `setFullScreenIntent(..., false)`:** Trên Android 12 đến 14, việc gọi `setFullScreenIntent(null, false)` để hủy heads-up có thể gây treo thông báo hoặc hành vi không xác định trên giao diện người dùng của một số OEM. Chuyển sang kênh riêng `IMPORTANCE_LOW` kết hợp `setTimeoutAfter(1500L)` đảm bảo thông báo xác nhận biến mất nhẹ nhàng sau 1.5 giây mà không cần can thiệp cờ toàn màn hình.
+
+* **4. Tỉa Mục Quá Hạn khi RESUMED (`store.prune()`):**
+  - Trong `RemoraMainScreen`, ngay khi ứng dụng vào trạng thái `Lifecycle.State.RESUMED`, gọi `store.prune()` trước khi `store.pending.collect` để dọn dẹp các ảnh chờ đã quá 24 giờ khỏi SharedPreferences.
