@@ -88,3 +88,84 @@ benchmark (once unblocked) shows semantic recall failures that a persisted lexic
 Structured label filters: same conclusion — hierarchy labels (subject/course/chapter) are now decodable
 (T038) but nothing populates them yet; filtering on `tags.subject` is already implicitly covered by the
 lexical field weights, and adding explicit filters needs populated labels plus labeled queries first.
+
+## Scale benchmark v2 — lexical channel at 1k/5k cards (2026-10-26)
+
+The v1 evidence rested on a 24-card fixture; too small to justify the FTS decision. v2 scales the lexical
+measurement. Harness: `app/src/test/java/com/remora/benchmark/LexicalScaleBenchmarkTest.kt` (plain JVM,
+JUnit4, no new dependencies; the v1 fixture and `PipelineBenchmarkTest` are untouched).
+
+### Dataset construction
+
+- Deterministic generator (fixed seed 20261026; the test asserts a rebuild is byte-identical) drawing
+  title/subject/topics/intent/summary/ocr from a fixed synthetic Vietnamese study vocabulary mirroring the
+  v1 fixture style. All content synthetic and consent-safe; no real user data anywhere in the artifacts.
+- Two corpus sizes: **1,000** and **5,000** cards. Composition per size:
+  - `planted`: 5 cards per planted query (10 queries) containing ALL target terms — the generator knows the
+    exact ground truth by construction.
+  - `genericSharing` (4% of corpus per pool, 5 pools): the generic half of a query without the specific
+    target term ("định lý" without "bayes", "phân tích"/"tích phân" without "từng phần", "đạo hàm" without
+    "riêng", "phân phối" without "chuẩn", "đường đi" without "euler"). These probe the coverage gate.
+  - `nearMiss` (2% per pool, 2 pools): single-term probes ("SQL" without "join"; "quan hệ" without
+    ERD/nhiều).
+  - `noise`: the remainder, unrelated synthetic study cards sharing no query term.
+- 12 queries: 2 exact Vietnamese keywords ("định lý Bayes", "phân phối chuẩn"), 1 diacritic-stripped
+  multi-word ("tich phan tung phan"), 2 course-code abbreviations ("ctdl", "mmt"), 2 mixed EN/VN ("big O
+  complexity", "sql join"), 1 formula, 1 multi-word ERD (4 terms), 1 graph query ("đường đi Euler"), and
+  2 junk no-result queries ("công thức nấu ăn", "cách chơi game offline").
+
+### Measured results
+
+Per query: P/R vs planted ground truth; latency = sequential in-memory scan over the whole corpus
+(production-like; one untimed JIT warm-up pass, then 3 measured passes whose result sets must be identical).
+
+| size | planted/generic/nearMiss/noise | scan/query P50 | scan/query P95 | per card | micro P (planted) | micro R |
+|---|---|---|---|---|---|---|
+| 1,000 | 50 / 200 / 40 / 710 | 14.1 ms | 21.3 ms | ~14.1 µs | 0.181 | 1.000 |
+| 5,000 | 50 / 1,000 / 200 / 3,750 | 61.5 ms | 80.3 ms | ~12.3 µs | 0.043 | 1.000 |
+
+Per-query at 1k / 5k (P, R): bayes-exact 0.111/0.024 R=1.0; tich-phan-folded 0.100/0.024 R=1.0;
+ctdl-abbrev 0.833/0.833 R=1.0; mmt-abbrev 1.000 R=1.0; big-o-mixed 1.000 R=1.0; sql-join 0.200/0.048
+R=1.0; dao-ham-rieng 0.111/0.024 R=1.0; phan-phoi-chuan 0.111/0.024 R=1.0; erd-multi 1.000 R=1.0;
+duong-di-euler 0.111/0.024 R=1.0. Junk queries matched **0 cards** at both sizes (gate holds).
+Stability: 3 repeated passes returned identical result sets at both sizes (asserted).
+
+Gates: recall >= 0.95 per planted query — actual **R = 1.000 on all 10** at both sizes; junk = 0 matches.
+
+### Findings at scale
+
+- Recall holds 1.000 at 1k and 5k; the small-fixture recall conclusion survives scaling.
+- Precision on queries whose generic prefix alone reaches the 2/3 coverage gate collapses
+  (0.111 → 0.024 as generic-sharing distractors grow) — the v1 "known residual weakness" confirmed and
+  quantified at scale. Discriminative queries (abbreviation "mmt", mixed-language, 4-term ERD) keep
+  P = 1.000. In production the hybrid engine's rank fusion reorders these below exact matches, but the
+  strong-match set is over-inclusive; a candidate fix (field-weighted coverage / most-specific-term
+  requirement) needs its own labeled corpus first.
+- Two matcher behaviors surfaced that 24 cards could not show: (a) the acronym-containment rule matches
+  "ctdl" inside the initials of "Công thức Định lý Bayes" ("ctdlb") — one false positive per corpus;
+  (b) the <=2-term half-coverage rule lets single-term "SQL" cards match "sql join" (the sql near-miss
+  pool leaks: P 0.200 at 1k, 0.048 at 5k).
+- Latency is linear at ~12–14 µs per card per query on the development JVM (full scan, no caching):
+  ~61–80 ms per query at 5,000 cards. Fine for the MVP corpus, but this is the concrete number to watch —
+  it is the revisit trigger for an indexed lexical channel, and a phone CPU will be slower than this JVM.
+
+### FTS verdict — cannot be benchmarked in this environment (deferred)
+
+A real SQLite FTS4/FTS5 candidate could NOT be executed here; evidence from the repo:
+
+1. Plain JVM unit tests (`testDebugUnitTest`) have no SQLite engine on the classpath:
+   `app/build.gradle.kts` test deps are junit, kotlinx-coroutines-test, turbine only; there is no
+   Robolectric and no JDBC SQLite driver (`org.xerial:sqlite-jdbc`) anywhere in `app/build.gradle.kts` or
+   `gradle/libs.versions.toml`. Room's SQLite/FTS APIs are Android runtime classes — they cannot load in a
+   plain JVM test.
+2. The instrumented path (`androidTest`, where `androidx.room:room-testing` lives) requires an emulator or
+   device; no emulator exists in this environment — the same blocker already recorded for `MigrationTest`
+   in `docs/decisions.md` §21 ("chưa chạy được: không có emulator").
+3. Adding a Robolectric/sqlite-jdbc dependency to fake one is forbidden by this task's constraints
+   (no new Gradle dependencies).
+
+Per the T033/T044 conditional gate, a comparison that cannot be run means: **FTS stays SKIPPED —
+deferred, benchmark unavailable (2026-10-26)**. Revisit conditions: (a) an instrumented/emulator runtime
+becomes available so a real FTS candidate can be measured fairly, or (b) corpus scan latency degrades on
+a real device (measured ~12–14 µs/card/query on the dev JVM; linear), or (c) the live-embedding benchmark
+(once unblocked) shows semantic recall failures that a persisted lexical index demonstrably fixes.

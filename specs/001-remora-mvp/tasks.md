@@ -375,6 +375,7 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 - [ ] **T033 [P2] Full-Text Keyword Search (FTS) SQLite virtual table**
   - **File Path**: `app/src/main/java/com/remora/data/local/MemoryCardFtsDao.kt`
   - **Acceptance Criteria**: Provides exact keyword search over `ocr_text`.
+  - **Evidence**: deferred — benchmark unavailable (2026-10-26), see `docs/benchmark/report.md` "Scale benchmark v2" section (lexical R=1.000 at 1k/5k cards; FTS could not be executed: no SQLite engine in plain JVM tests, no emulator for instrumented runs). Revisit when an instrumented runtime is available or corpus scan latency degrades (~12–14 µs/card/query measured on dev JVM).
 
 - [ ] **T034 [P2] Bulk Gallery Import Worker**
   - **File Path**: `app/src/main/java/com/remora/work/BulkImportWorker.kt`
