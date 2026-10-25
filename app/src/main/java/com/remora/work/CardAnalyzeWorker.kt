@@ -13,6 +13,7 @@ import androidx.work.workDataOf
 import com.remora.RemoraApp
 import com.remora.ai.AiGatewayClient
 import com.remora.ai.ApiException
+import com.remora.ai.model.ExtractCardResponseDto
 import com.remora.capture.CapturePolicy
 import com.remora.capture.NotificationHelper
 import com.remora.core.model.contract.VectorMath
@@ -23,6 +24,7 @@ import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.util.ImageCompressor
+import com.remora.util.SensitiveDataRedactor
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -87,7 +89,9 @@ class CardAnalyzeWorker(
                 return handleFailure(db, card, error)
             }
 
-            val extracted = extractResult.getOrThrow()
+            // Redact before any field is stored, embedded or logged: secrets must not survive
+            // into Room, the embedding payload, or resurfacing inputs.
+            val extracted = redactSensitive(extractResult.getOrThrow())
 
             // 3. Compose text for embedding
             val combinedText = buildString {
@@ -239,6 +243,20 @@ class CardAnalyzeWorker(
         fun uniqueWorkName(cardId: Long): String = "card-analysis-$cardId"
     }
 }
+
+/**
+ * Applies [SensitiveDataRedactor] to every text field of the AI extraction so secrets never
+ * reach Room, the embedding payload, or resurfacing inputs through a side field.
+ */
+internal fun redactSensitive(dto: ExtractCardResponseDto): ExtractCardResponseDto = dto.copy(
+    title = SensitiveDataRedactor.redact(dto.title),
+    summary = SensitiveDataRedactor.redact(dto.summary),
+    ocr_text = SensitiveDataRedactor.redact(dto.ocr_text),
+    tags = dto.tags.copy(
+        subject = SensitiveDataRedactor.redact(dto.tags.subject),
+        topics = dto.tags.topics.map { SensitiveDataRedactor.redact(it) }
+    )
+)
 
 /**
  * Fast-path predicate: returns true if the card has already reached [ProcessingStatus.DONE]

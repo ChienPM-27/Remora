@@ -460,3 +460,12 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 * **Resurfacing validator hợp nhất:** filter (confidence hữu hạn ∈ [0,1] và > 0.80, id hợp lệ, relation khớp group) → sort (confidence desc, ưu tiên ACTIONABLE > COMPLEMENTARY > SIMILAR) → dedupe theo candidateId (giữ confidence cao nhất) → cap 2/group. Test cũ "first occurrence" của AI branch đổi thành "highest confidence" theo contract Consent.
 * **Persistence:** giữ `replaceResultsForCard` (transaction delete+insert) của AI branch thay vì delete+insert rời của Consent branch.
 * **Lưu ý PENDING khi thu hồi consent:** thẻ PENDING khi consent bị thu hồi sẽ không tự re-enqueue khi consent được cấp lại (không có UI thu hồi trong MVP); người dùng có nút retry cho thẻ FAILED. Đánh đổi có chủ đích để không upload khi chưa có consent.
+
+---
+
+## 20. OCR Sensitive-Data Redaction (2026-10-26, branch `feat/privacy-and-import-hardening`)
+
+* **Bộ lọc `SensitiveDataRedactor` (util):** thuần Kotlin, deterministic, chạy trên mọi text field AI trả về (title, summary, tags.subject, topics, ocr_text) ngay tại `CardAnalyzeWorker.redactSensitive` TRƯỚC khi lưu Room, build embedding text và đưa vào resurfacing. Che: (1) số thẻ 13–19 chữ số (kể cả phân cách space/dash/dot/comma) chỉ khi qua kiểm tra Luhn — số học bình thường (MSSV, SĐT, năm) không bị che; (2) chuỗi 4–8 chữ số trên dòng có ngữ cảnh OTP/mã xác thực/verification code, kể cả giá trị ở dòng kế tiếp khi dòng nhãn chỉ chứa nhãn; (3) giá trị sau nhãn password/passcode/mật khẩu/PIN cùng dòng hoặc dòng kế tiếp. Ngoại lệ cố ý: "Pin: 85%" (pin = pin điện thoại) không che.
+* **Log nhạy cảm:** bỏ `parsed.embeddingText` khỏi log của `SemanticSearchEngine` (chỉ còn số card, time label, số terms). FR-025 mở rộng: cấm log raw search query.
+* **Giới hạn bắt buộc phải ghi nhận:** redaction chạy SAU OCR/AI extraction — bí mật nằm trong ảnh vẫn được gửi tới AI gateway cùng yêu cầu extraction. Giới hạn đã chấp nhận; redaction on-device trước upload là việc của tương lai. Spec FR-007 và data-model.md đã cập nhật đúng chính sách này.
+* **Test:** `SensitiveDataRedactorTest` (Luhn pass/fail, phân cách, false positive nội dung học tập, OTP có/không ngữ cảnh, password một dòng/hai dòng, CRLF, deterministic) và `CardRedactionTest` (mọi field của extraction DTO đều được redact; nội dung học tập giữ nguyên).

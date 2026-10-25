@@ -194,7 +194,7 @@ So that I can connect new lessons with prior knowledge, review prerequisites, an
 
 ### Knowledge Card Management & AI Processing
 - **FR-006**: System MUST create a local knowledge card in `PENDING` state immediately upon user confirmation to save.
-- **FR-007**: System MUST extract structured data for each saved card: title (<= 80 chars), summary (2–4 sentences), subject tag, topic tags list, content type, and full verbatim text.
+- **FR-007**: System MUST extract structured data for each saved card: title (<= 80 chars), summary (2–4 sentences), subject tag, topic tags list, content type, and full verbatim text. All extracted text fields (title, summary, tags, OCR) MUST pass sensitive-data redaction (payment card numbers via Luhn, contextual OTP codes, labeled passwords/PINs) before being stored, embedded, or logged. Redaction runs after AI extraction and therefore does not affect what is uploaded to the AI gateway.
 - **FR-008**: System MUST classify content type into one of: `THEORY`, `PROBLEM`, `SOLUTION`, `CODE`, `NOTES`, `UNKNOWN`.
 - **FR-009**: System MUST apply graceful sanitization if AI extraction omits fields: default subject to "chưa phân loại", content type to `UNKNOWN`, preserving the image unconditionally.
 - **FR-010**: System MUST transition card status to `DONE` upon successful analysis and embedding generation.
@@ -221,7 +221,7 @@ So that I can connect new lessons with prior knowledge, review prerequisites, an
 - **FR-024**: System MUST strictly discard any resurfaced result whose candidate identifier does not match an input candidate.
 
 ### System Configuration & Security
-- **FR-025**: System MUST NOT log raw student images, full OCR transcriptions, or personal notes in application logs.
+- **FR-025**: System MUST NOT log raw student images, full OCR transcriptions, personal notes, or raw search query text in application logs.
 
 ---
 

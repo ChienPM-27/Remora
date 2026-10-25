@@ -75,7 +75,7 @@ class SemanticSearchEngine(
             return SearchOutcome(results = results, timeLabel = resolved.label, indexedCount = indexed)
         }
 
-        Timber.i("Search '${parsed.embeddingText}' over ${entities.size} cards (time=${resolved.label})")
+        Timber.i("Search over ${entities.size} cards (time=${resolved.label}, terms=${parsed.terms.size})")
 
         val queryVector = embedQuery(parsed.embeddingText)
         currentCoroutineContext().ensureActive()
