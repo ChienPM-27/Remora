@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -73,18 +74,72 @@ class CardAnalyzeWorkerIsolationTest {
     }
 
     @Test
-    fun executeResurfacingWithIsolation_timesOutWhenCallExceedsLimit() = runTest {
+    fun executeResurfacingWithIsolation_timesOutWhenCallExceedsLimit_doesNotThrow() = runTest {
         val card = createTestCard()
 
-        try {
-            executeResurfacingWithIsolation(card, timeoutMs = 50L) {
-                delay(500L) // Exceeds 50ms timeout
-            }
-            fail("Expected timeout cancellation exception to be rethrown")
-        } catch (e: CancellationException) {
-            // TimeoutCancellationException is a subclass of CancellationException
-            assertTrue(e is kotlinx.coroutines.TimeoutCancellationException)
-            assertEquals(ProcessingStatus.DONE, card.status)
+        // When resurfacing times out, executeResurfacingWithIsolation catches TimeoutCancellationException,
+        // logs the event, and does NOT rethrow. Card status remains DONE.
+        executeResurfacingWithIsolation(card, timeoutMs = 50L) {
+            delay(500L) // Exceeds 50ms timeout
         }
+
+        assertEquals(ProcessingStatus.DONE, card.status)
+    }
+
+    @Test
+    fun shouldSkipAnalysis_whenDoneWithEmbedding_returnsTrue() {
+        val doneCard = createTestCard(id = 1L, status = ProcessingStatus.DONE)
+        assertTrue(shouldSkipAnalysis(doneCard))
+    }
+
+    @Test
+    fun shouldSkipAnalysis_whenDoneWithoutEmbedding_returnsFalse() {
+        val doneCardNoEmbedding = createTestCard(id = 2L, status = ProcessingStatus.DONE).copy(embedding = null)
+        assertFalse(shouldSkipAnalysis(doneCardNoEmbedding))
+
+        val doneCardEmptyEmbedding = createTestCard(id = 3L, status = ProcessingStatus.DONE).copy(embedding = floatArrayOf())
+        assertFalse(shouldSkipAnalysis(doneCardEmptyEmbedding))
+    }
+
+    @Test
+    fun shouldSkipAnalysis_whenPendingOrFailed_returnsFalse() {
+        val pendingCard = createTestCard(id = 4L, status = ProcessingStatus.PENDING)
+        assertFalse(shouldSkipAnalysis(pendingCard))
+
+        val failedCard = createTestCard(id = 5L, status = ProcessingStatus.FAILED)
+        assertFalse(shouldSkipAnalysis(failedCard))
+    }
+
+    @Test
+    fun analyzeCardIfRequired_whenDoneWithEmbedding_doesNotCallExtractCard() = runTest {
+        val doneCard = createTestCard(id = 10L, status = ProcessingStatus.DONE)
+        var extractCardCalled = false
+
+        val executed = analyzeCardIfRequired(doneCard) {
+            extractCardCalled = true
+        }
+
+        assertFalse("Should not call extractCard for DONE card with embedding", extractCardCalled)
+        assertFalse(executed)
+    }
+
+    @Test
+    fun analyzeCardIfRequired_whenPendingOrFailed_callsExtractCard() = runTest {
+        val pendingCard = createTestCard(id = 11L, status = ProcessingStatus.PENDING)
+        var extractCardCalled = false
+
+        val executedPending = analyzeCardIfRequired(pendingCard) {
+            extractCardCalled = true
+        }
+        assertTrue("Should call extractCard for PENDING card", extractCardCalled)
+        assertTrue(executedPending)
+
+        extractCardCalled = false
+        val failedCard = createTestCard(id = 12L, status = ProcessingStatus.FAILED)
+        val executedFailed = analyzeCardIfRequired(failedCard) {
+            extractCardCalled = true
+        }
+        assertTrue("Should call extractCard for FAILED card", extractCardCalled)
+        assertTrue(executedFailed)
     }
 }

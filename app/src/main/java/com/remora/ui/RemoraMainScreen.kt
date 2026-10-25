@@ -134,7 +134,6 @@ fun RemoraMainScreen(
                     selected = currentTab == MainNavigationTab.TIMELINE,
                     onClick = {
                         currentTab = MainNavigationTab.TIMELINE
-                        galleryViewModel.selectSourceCard(null)
                         onTabSelected(MainNavigationTab.TIMELINE)
                     },
                     icon = {
@@ -163,7 +162,6 @@ fun RemoraMainScreen(
                     selected = currentTab == MainNavigationTab.SEARCH,
                     onClick = {
                         currentTab = MainNavigationTab.SEARCH
-                        galleryViewModel.selectSourceCard(null)
                         onTabSelected(MainNavigationTab.SEARCH)
                     },
                     icon = {
@@ -220,7 +218,6 @@ fun RemoraMainScreen(
                     selected = currentTab == MainNavigationTab.SETTINGS,
                     onClick = {
                         currentTab = MainNavigationTab.SETTINGS
-                        galleryViewModel.selectSourceCard(null)
                         onTabSelected(MainNavigationTab.SETTINGS)
                     },
                     icon = {

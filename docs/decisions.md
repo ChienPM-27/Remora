@@ -364,3 +364,19 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - **Quyết định kỹ thuật:**
     - Định nghĩa `sealed interface SettingsUiState { data object Loading : SettingsUiState; data class Loaded(val setting: AppSettingEntity?) : SettingsUiState }`.
     - `SettingsScreenContent`: khi `uiState is SettingsUiState.Loading`, không vẽ switch (`if (!isLoading) Switch(...)`), loại bỏ hoàn toàn hiện tượng switch nhấp nháy giá trị mặc định khi cơ sở dữ liệu đang ở trạng thái paused.
+
+---
+
+## 16. Tối ưu Resurfacing Timeout & Chốt chặn Thẻ DONE (Task 9) (2026-10-25)
+
+* **1. Lý do Timeout Phải Bắt Riêng (`TimeoutCancellationException`):**
+  - Trong Kotlin Coroutines, `TimeoutCancellationException` là lớp con của `CancellationException`. Nếu chỉ dùng `catch (e: CancellationException)` để re-throw cho cooperative cancellation, thì khi pipeline gợi nhớ vượt quá thời gian timeout (`30_000L`), ngoại lệ timeout cũng bị ném ra ngoài, khiến `doWork()` của worker bị hủy và kết thúc thất bại thay vì thành công.
+  - Xử lý: Đặt `catch (e: TimeoutCancellationException)` đứng trước `catch (e: CancellationException)` trong `executeResurfacingWithIsolation`. Khi timeout, chỉ ghi log cảnh báo ngắn gọn (`cardId`, `timeoutMs`, không chứa dữ liệu nhạy cảm) và không ném lại; worker tiếp tục kết thúc `Result.success()` với thẻ đã lưu `DONE`.
+* **2. Giới hạn của Heuristic 90 Giây Tính từ `createdAt`:**
+  - Cửa sổ 90 giây trong `resolveResurfacingUiState` tính khoảng cách thời gian giữa thời điểm hiện tại (`nowMs`) và thời điểm tạo thẻ (`card.createdAt`).
+  - Trong kịch bản thiết bị mất mạng, máy bận hoặc WorkManager phải xếp hàng đợi lâu, thời gian trễ từ khi chụp/lưu thẻ đến khi worker bắt đầu phân tích có thể vượt quá hoặc gần hết 90 giây. Khi đó, ngay khi thẻ vừa chuyển `DONE`, cửa sổ 90 giây có thể đã hết hạn khiến giao diện chuyển sang `NO_CONFIDENT_LINKS` sớm hơn dự kiến.
+  - Đây là sự đánh đổi có chủ đích (tradeoff) để giữ kiến trúc tối giản và không thay đổi schema Room SQLite (không thêm cột `analyzed_at` hay `resurfacing_status` trong bản MVP).
+* **3. Chốt chặn Thẻ DONE ở Đầu Worker (`shouldSkipAnalysis`):**
+  - Ở đầu `doWork()`, kiểm tra nếu thẻ đã ở trạng thái `ProcessingStatus.DONE` và đã có vector embedding hợp lệ, lập tức trả về `Result.success()` mà không thực hiện gọi lại Gemini (bảo toàn quota AI và tiết kiệm tài nguyên mạng).
+* **4. Đơn vị Duy nhất Gọi `selectSourceCard(null)`:**
+  - Loại bỏ các lệnh gọi trùng lặp `selectSourceCard(null)` trực tiếp trong `RemoraMainScreen`. Toàn bộ việc unpin được tập trung tại một nơi duy nhất là callback `onTabSelected` trong `MainActivity.kt`.

@@ -18,6 +18,7 @@ import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.util.ImageCompressor
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 
@@ -35,6 +36,12 @@ class CardAnalyzeWorker(
         val db = RemoraDatabase.getInstance(applicationContext)
         val cardEntity = db.memoryCardDao().getCardById(cardId) ?: return Result.failure()
         val card = cardEntity.toDomainModel()
+
+        // Guard: if already DONE with valid embedding, return success immediately without re-calling AI
+        if (shouldSkipAnalysis(card)) {
+            Timber.i("MemoryCard #$cardId is already DONE with embedding; skipping analysis.")
+            return Result.success()
+        }
 
         Timber.i("Starting analysis for MemoryCard #$cardId (current attempts: ${card.attemptCount})")
 
@@ -179,9 +186,34 @@ class CardAnalyzeWorker(
 }
 
 /**
+ * Fast-path predicate: returns true if the card has already reached [ProcessingStatus.DONE]
+ * and possesses a non-empty embedding, indicating analysis is already complete.
+ */
+internal fun shouldSkipAnalysis(card: MemoryCard): Boolean {
+    val emb = card.embedding
+    return card.status == ProcessingStatus.DONE && emb != null && emb.isNotEmpty()
+}
+
+/**
+ * Executes [extractCard] only if the card is not already [ProcessingStatus.DONE] with embedding.
+ * Returns true if analysis was performed, false if skipped.
+ */
+internal suspend fun analyzeCardIfRequired(
+    card: MemoryCard,
+    extractCard: suspend () -> Unit
+): Boolean {
+    if (shouldSkipAnalysis(card)) {
+        return false
+    }
+    extractCard()
+    return true
+}
+
+/**
  * Isolated runner for resurfacing pipeline with strict timeout and exception isolation.
- * Re-throws [CancellationException] to honor coroutine cancellation.
- * Swallows standard exceptions so a resurfacing failure never invalidates an already-completed [ProcessingStatus.DONE] card.
+ * Catches [TimeoutCancellationException] separately without re-throwing, ensuring a timeout never fails the worker.
+ * Re-throws standard [CancellationException] to honor coroutine cancellation.
+ * Swallows other exceptions so a resurfacing failure never invalidates an already-completed [ProcessingStatus.DONE] card.
  */
 internal suspend fun executeResurfacingWithIsolation(
     card: MemoryCard,
@@ -192,6 +224,8 @@ internal suspend fun executeResurfacingWithIsolation(
         withTimeout(timeoutMs) {
             runPipeline(card)
         }
+    } catch (e: TimeoutCancellationException) {
+        Timber.w("Resurfacing pipeline timed out after ${timeoutMs}ms for card #${card.id}")
     } catch (e: CancellationException) {
         Timber.w("Resurfacing pipeline cancelled for card #${card.id}")
         throw e
