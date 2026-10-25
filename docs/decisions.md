@@ -380,3 +380,37 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - Ở đầu `doWork()`, kiểm tra nếu thẻ đã ở trạng thái `ProcessingStatus.DONE` và đã có vector embedding hợp lệ, lập tức trả về `Result.success()` mà không thực hiện gọi lại Gemini (bảo toàn quota AI và tiết kiệm tài nguyên mạng).
 * **4. Đơn vị Duy nhất Gọi `selectSourceCard(null)`:**
   - Loại bỏ các lệnh gọi trùng lặp `selectSourceCard(null)` trực tiếp trong `RemoraMainScreen`. Toàn bộ việc unpin được tập trung tại một nơi duy nhất là callback `onTabSelected` trong `MainActivity.kt`.
+
+---
+
+## 17. Quản lý Trạng thái Ảnh chờ Quyết định (PendingCaptureStore & Lifecycle-Aware UI) (Task 10) (2026-10-25)
+
+* **1. Phân tích Nguyên nhân Lỗi (Root Causes):**
+  - `ScreenshotObserver` trước đây vừa gọi `CaptureEventManager.emitScreenshot` (mở sheet trong app) vừa gọi `NotificationHelper.showCapturePrompt` (bắn notification) mà không biết trạng thái foreground/background của ứng dụng.
+  - `CaptureActionReceiver` khi người dùng bấm Lưu/Bỏ qua/Tắt 1 giờ trên notification không đồng bộ xoá trạng thái UI in-memory (`activeCaptureUri`), khiến khi người dùng quay lại app vẫn bị hiện lại sheet cho ảnh đã quyết định.
+  - `CaptureEventManager` là `SharedFlow` không replay (`replay = 0`): nếu Activity bị huỷ khi ở nền hoặc chưa khởi động, sự kiện phát hiện ảnh chụp bị mất hoàn toàn, dẫn đến khi mở app không có prompt cho ảnh chưa quyết định.
+  - Tapping vào notification mở MainActivity kèm `EXTRA_IMAGE_URI` không được quản lý hàng đợi, dễ gây xung đột hoặc sót ảnh khi người dùng chụp liên tiếp nhiều ảnh.
+
+* **2. Thiết kế Hàng đợi Thuần & Bộ lưu trữ `PendingCaptureStore`:**
+  - Logic hàng đợi thuần (`PendingCaptureQueue`):
+    - Thêm mục lũy tiến (idempotent add) theo `uriString`: trùng URI không nhân đôi bản ghi. Hỗ trợ cờ `prioritize` để đưa ảnh vừa chạm từ notification lên đầu hàng đợi.
+    - Giới hạn tối đa 5 mục (`MAX_ITEMS = 5`), tự động loại bỏ mục cũ nhất khi vượt ngưỡng.
+    - Tự động tỉa (prune) các mục đã tồn tại quá 24 giờ (`TTL_MS = 24h`).
+    - Lớp bọc mỏng `PendingCaptureStore` sử dụng `SharedPreferences` (JSON) và phơi `pending: StateFlow<List<PendingCapture>>`. Không thêm dependency, không đổi schema Room SQLite.
+
+* **3. Cờ Trạng thái Foreground (`AppForegroundTracker`):**
+  - Cung cấp cờ `@Volatile var isForeground = false` được cập nhật tại `MainActivity.onStart()` và `MainActivity.onStop()`.
+  - Khi app đang ở foreground: chỉ gọi `store.markPending(uri)` (giao diện in-app tự kích hoạt sheet), KHÔNG phát notification chụp màn hình ra ngoài thanh thông báo hệ thống.
+  - Khi app ở background: gọi `store.markPending(uri)` và đồng thời đăng notification cho người dùng tương tác.
+
+* **4. Ma trận Trạng thái Giải phóng Quyết định (Resolve Points):**
+  - **`ACTION_SAVE` (từ notification hoặc sheet):** Lưu thẻ vào Room SQLite, lập tức gọi `store.resolve(uri)` và dismiss notification capture.
+  - **`ACTION_SKIP` / Bấm "Bỏ qua" / Vuốt đóng sheet:** Gọi `store.resolve(uri)` và dismiss notification.
+  - **`ACTION_MUTE_1H` / Bấm "Tắt 1 giờ":** Cập nhật `pause_until`, gọi `store.resolve(uri)` và dismiss notification.
+  - **`ACTION_PAUSE` / Bấm "Tạm dừng":** Cập nhật `paused = true`, gọi `store.resolve(uri)` và dismiss notification.
+  - **Hành vi Vuốt bỏ notification (không bấm nút):** KHÔNG gọi resolve. Ảnh vẫn nằm trong `PendingCaptureStore` để khi mở app người dùng vẫn được hỏi lưu.
+
+* **5. Chốt chặn Chống Đua (Race-condition Prevention) & UI Lifecycle:**
+  - `RemoraMainScreen` chỉ kích hoạt kiểm tra và hiển thị sheet khi lifecycle ở trạng thái `RESUMED` (`repeatOnLifecycle(Lifecycle.State.RESUMED)`).
+  - Trước khi hiện sheet cho bất kỳ URI nào, kiểm tra `memoryCardDao.countCardsByImageUri(uriString) > 0` hoặc ảnh không thể đọc (`openInputStream(uri) == null`). Nếu đã có thẻ hoặc ảnh hỏng/bị xoá, lập tức gọi `store.resolve(uri)` và chuyển sang ảnh kế tiếp trong hàng đợi.
+  - Khi một sheet được giải quyết (Lưu/Bỏ qua), `store.pending` tự động phát danh sách mới, UI lập tức hiển thị sheet cho ảnh tiếp theo nếu còn trong hàng đợi (ưu tiên ảnh mới nhất).

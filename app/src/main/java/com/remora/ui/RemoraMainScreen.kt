@@ -35,14 +35,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import com.remora.capture.CaptureEventManager
 import com.remora.capture.CapturePolicy
 import com.remora.capture.NotificationHelper
+import com.remora.capture.PendingCaptureStore
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
 import com.remora.core.model.resurface.ResurfacedItem
@@ -85,44 +88,49 @@ fun RemoraMainScreen(
         val context = LocalContext.current
         remember(context) { SettingsViewModel(RemoraDatabase.getInstance(context).appSettingDao()) }
     },
-    initialCaptureUri: Uri? = null,
     initialTab: MainNavigationTab = MainNavigationTab.TIMELINE,
     onTabSelected: (MainNavigationTab) -> Unit = {},
-    onClearInitialCaptureUri: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    var currentTab by remember { mutableStateOf(initialTab) }
-    var activeCaptureUri by remember { mutableStateOf<Uri?>(initialCaptureUri) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val store = remember(context) { PendingCaptureStore.getInstance(context) }
+    var currentTab by remember { mutableStateOf(initialTab) }
+    var activePromptUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Observe incoming screenshot events emitted by ContentObserver or ScreenCaptureCallback
-    LaunchedEffect(Unit) {
-        CaptureEventManager.screenshotEvents.collect { uri ->
-            val db = RemoraDatabase.getInstance(context)
-            val exists = withContext(Dispatchers.IO) {
-                db.memoryCardDao().getCardByImageUri(uri.toString()) != null
-            }
-            if (!exists) {
-                Timber.i("Foreground received screenshot event: $uri -> opening SavePromptSheet")
-                activeCaptureUri = uri
-            } else {
-                Timber.i("Foreground received screenshot event for already saved uri: $uri -> ignoring")
-            }
-        }
-    }
-
-    // Keep activeCaptureUri updated if MainActivity passes a new one via Intent
-    LaunchedEffect(initialCaptureUri) {
-        if (initialCaptureUri != null) {
-            val db = RemoraDatabase.getInstance(context)
-            val exists = withContext(Dispatchers.IO) {
-                db.memoryCardDao().getCardByImageUri(initialCaptureUri.toString()) != null
-            }
-            if (!exists) {
-                activeCaptureUri = initialCaptureUri
-            } else {
-                onClearInitialCaptureUri()
+    // Observe pending captures reactively only when RESUMED
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            store.pending.collect { pendingList ->
+                // If active prompt is no longer in pending list (e.g. resolved externally), clear it
+                if (activePromptUri != null && pendingList.none { it.uriString == activePromptUri.toString() }) {
+                    activePromptUri = null
+                }
+                // If no sheet currently active, inspect pending queue for the next valid candidate
+                if (activePromptUri == null && pendingList.isNotEmpty()) {
+                    val db = RemoraDatabase.getInstance(context)
+                    for (item in pendingList) {
+                        val count = withContext(Dispatchers.IO) {
+                            db.memoryCardDao().countCardsByImageUri(item.uriString)
+                        }
+                        val uri = Uri.parse(item.uriString)
+                        val readable = withContext(Dispatchers.IO) {
+                            try {
+                                context.contentResolver.openInputStream(uri)?.use { true } ?: false
+                            } catch (e: Exception) {
+                                false
+                            }
+                        }
+                        if (count > 0 || !readable) {
+                            Timber.i("Pruning invalid/existing pending capture: ${item.uriString} (count=$count, readable=$readable)")
+                            store.resolve(item.uriString)
+                        } else {
+                            activePromptUri = uri
+                            break
+                        }
+                    }
+                }
             }
         }
     }
@@ -352,17 +360,20 @@ fun RemoraMainScreen(
         }
     }
 
-    // Modal Save Prompt Sheet (04-save.png) when a screenshot is detected
-    activeCaptureUri?.let { uri ->
+    // Modal Save Prompt Sheet (04-save.png) when a pending capture is ready
+    activePromptUri?.let { uri ->
         SavePromptSheet(
             imageUri = uri,
             onSave = { intentText ->
                 NotificationHelper.dismissNotification(context)
+                store.resolve(uri)
+                activePromptUri = null
+
                 val db = RemoraDatabase.getInstance(context)
                 scope.launch(Dispatchers.IO) {
-                    val existing = db.memoryCardDao().getCardByImageUri(uri.toString())
-                    if (existing != null) {
-                        Timber.i("SavePromptSheet: card already exists for $uri (#${existing.id}), skipping duplicate insert")
+                    val count = db.memoryCardDao().countCardsByImageUri(uri.toString())
+                    if (count > 0) {
+                        Timber.i("SavePromptSheet: card already exists for $uri, skipping duplicate insert")
                     } else {
                         val card = MemoryCard(
                             imageUri = uri.toString(),
@@ -385,18 +396,18 @@ fun RemoraMainScreen(
                         WorkManager.getInstance(context).enqueue(workRequest)
                     }
                 }
-                activeCaptureUri = null
-                onClearInitialCaptureUri()
                 currentTab = MainNavigationTab.TIMELINE
                 onTabSelected(MainNavigationTab.TIMELINE)
             },
             onDismiss = {
                 NotificationHelper.dismissNotification(context)
-                activeCaptureUri = null
-                onClearInitialCaptureUri()
+                store.resolve(uri)
+                activePromptUri = null
             },
             onMute1Hour = {
                 NotificationHelper.dismissNotification(context)
+                store.resolve(uri)
+                activePromptUri = null
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
                     CapturePolicy.applyCaptureAction(
@@ -406,11 +417,11 @@ fun RemoraMainScreen(
                     )
                 }
                 Toast.makeText(context, "Đã tắt nhận diện ảnh chụp trong 1 giờ", Toast.LENGTH_SHORT).show()
-                activeCaptureUri = null
-                onClearInitialCaptureUri()
             },
             onPauseMonitoring = {
                 NotificationHelper.dismissNotification(context)
+                store.resolve(uri)
+                activePromptUri = null
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
                     CapturePolicy.applyCaptureAction(
@@ -420,8 +431,6 @@ fun RemoraMainScreen(
                     )
                 }
                 Toast.makeText(context, "Đã tạm dừng nhận diện ảnh chụp", Toast.LENGTH_SHORT).show()
-                activeCaptureUri = null
-                onClearInitialCaptureUri()
             }
         )
     }

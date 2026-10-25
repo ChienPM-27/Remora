@@ -19,10 +19,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.remora.capture.CaptureEventManager
+import com.remora.capture.AppForegroundTracker
 import com.remora.capture.CaptureForegroundService
 import com.remora.capture.CapturePolicy
 import com.remora.capture.NotificationHelper
+import com.remora.capture.PendingCaptureStore
 import com.remora.capture.ScreenshotObserver
 import com.remora.data.local.RemoraDatabase
 import com.remora.search.SemanticSearchEngine
@@ -42,9 +43,18 @@ import timber.log.Timber
 
 class MainActivity : ComponentActivity() {
 
-    private var initialCaptureUri by mutableStateOf<Uri?>(null)
     private var initialTab by mutableStateOf(MainNavigationTab.TIMELINE)
     private var resurfacingLaunchTargetCardId by mutableStateOf<Long?>(null)
+
+    override fun onStart() {
+        super.onStart()
+        AppForegroundTracker.isForeground = true
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppForegroundTracker.isForeground = false
+    }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -131,9 +141,7 @@ class MainActivity : ComponentActivity() {
                     val uri = ScreenshotObserver.queryLatestScreenshotUri(applicationContext)
                     if (uri != null) {
                         Timber.i("Found screenshot uri from ScreenCaptureCallback: $uri")
-                        withContext(Dispatchers.Main) {
-                            CaptureEventManager.emitScreenshot(uri)
-                        }
+                        PendingCaptureStore.getInstance(applicationContext).markPending(uri, prioritize = true)
                     }
                 }
             }
@@ -188,16 +196,12 @@ class MainActivity : ComponentActivity() {
                             galleryViewModel = galleryViewModel,
                             searchViewModel = searchViewModel,
                             settingsViewModel = settingsViewModel,
-                            initialCaptureUri = initialCaptureUri,
                             initialTab = initialTab,
                             onTabSelected = { tab ->
                                 if (tab != MainNavigationTab.RESURFACE) {
                                     galleryViewModel.selectSourceCard(null)
                                 }
                                 initialTab = tab
-                            },
-                            onClearInitialCaptureUri = {
-                                initialCaptureUri = null
                             }
                         )
                     }
@@ -222,19 +226,16 @@ class MainActivity : ComponentActivity() {
 
             lifecycleScope.launch(Dispatchers.IO) {
                 val db = RemoraDatabase.getInstance(applicationContext)
-                val existing = db.memoryCardDao().getCardByImageUri(uriStr)
-                if (existing != null) {
-                    Timber.i("MainActivity: card already exists for uri $uriStr (#${existing.id}), skipping SavePromptSheet")
+                val existingCount = db.memoryCardDao().countCardsByImageUri(uriStr)
+                if (existingCount > 0) {
+                    Timber.i("MainActivity: card already exists for uri $uriStr, skipping SavePromptSheet")
+                    PendingCaptureStore.getInstance(applicationContext).resolve(uriStr)
                     withContext(Dispatchers.Main) {
                         initialTab = MainNavigationTab.TIMELINE
                     }
                 } else {
-                    val uri = Uri.parse(uriStr)
-                    withContext(Dispatchers.Main) {
-                        Timber.i("MainActivity received intent with fresh capture uri: $uri")
-                        initialCaptureUri = uri
-                        CaptureEventManager.emitScreenshot(uri)
-                    }
+                    Timber.i("MainActivity received intent with fresh capture uri: $uriStr")
+                    PendingCaptureStore.getInstance(applicationContext).markPending(uriStr, prioritize = true)
                 }
             }
         }

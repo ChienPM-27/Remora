@@ -124,6 +124,7 @@ object NotificationHelper {
 
         val mute1hIntent = Intent(context, CaptureActionReceiver::class.java).apply {
             action = ACTION_MUTE_1H
+            putExtra(EXTRA_IMAGE_URI, imageUri.toString())
         }
         val mute1hPendingIntent = PendingIntent.getBroadcast(context, 3, mute1hIntent, piFlags)
 

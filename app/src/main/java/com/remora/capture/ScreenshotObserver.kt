@@ -157,8 +157,12 @@ class ScreenshotObserver(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
         )
         Timber.i("Fresh screenshot detected: id=" + id + ", uri=" + imageUri + ", name=" + displayName)
-        CaptureEventManager.emitScreenshot(imageUri)
-        onScreenshotDetected(imageUri, pathOrData)
+        PendingCaptureStore.getInstance(context).markPending(imageUri)
+        if (!AppForegroundTracker.isForeground) {
+            onScreenshotDetected(imageUri, pathOrData)
+        } else {
+            Timber.i("App is in foreground; skipping capture notification for id=" + id)
+        }
         return true
     }
 
