@@ -98,6 +98,7 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
   - **Acceptance Criteria**:
     - `HashUtil` generates SHA-256 hex string from image byte stream.
     - `ImageCompressor` downsizes images exceeding 1560px max dimension and compresses to JPEG (quality 80-85%, $\le 500$KB).
+  - **Evidence (2026-10-26)**: production integration landed on `feat/privacy-and-import-hardening` — Room v3 `image_hash` column + `insertCardIfHashAbsent` transactional dedup + ask-user duplicate dialog on gallery import; see decisions.md §21. Instrumented migration test written but not run (no emulator).
 
 - [x] **T007 [P0] [P] Implement Backend Gateway Auth & Quota Guard**
   - **File Paths**:
@@ -473,7 +474,7 @@ Status key per task: Implemented → Tested → Verified (device/demo) → Accep
 - [x] **T039 [P0] Correct temporal semantics for "tuần trước"** — **Implemented + Tested (implementation already rolled forward in c857a41; this change-set added fixed-clock boundary tests)**
   - **Files**: TimeResolver and its unit tests.
   - **Acceptance Criteria**: use the approved rolling 7–14 day window with a fixed clock; cover boundaries and ensure unrelated date expressions retain their defined semantics.
-  - **Evidence**: `TimeResolverTest` boundary cases: exact [now−14d, now−7d], inside/outside probes, clock-stability (commit 00a0ae2); benchmark temporal slice 8/8. Known limitation recorded: "hai tuần trước" still matches the "tuần trước" pattern.
+  - **Evidence**: `TimeResolverTest` boundary cases: exact [now−14d, now−7d], inside/outside probes, clock-stability (commit 00a0ae2); benchmark temporal slice 8/8. Known limitation recorded: "hai tuần trước" still matches the "tuần trước" pattern. **(Resolved 2026-10-26)**: longest-phrase-first resolver maps "hai tuần trước" to [now−21d, now−14d] and adds "tuần này"; see decisions.md §22.
 - [x] **T040 [P0] Make Resurfacing outcomes and persistence idempotent** — **Implemented + Tested**
   - **Files**: Stage2BatchEvaluator, ResurfacingManager, ResurfacingResultEntity/DAO and tests.
   - **Acceptance Criteria**: distinguish valid empty results from service/validation/persistence errors; validate candidate IDs, duplicate IDs, finite confidence in [0,1], and group/relation compatibility; retries do not create duplicate relationships or notifications. Keep confidence strictly greater than 0.80.
