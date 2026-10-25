@@ -3,10 +3,18 @@ package com.remora.ui
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -14,13 +22,19 @@ import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FormatListBulleted
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -35,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +73,9 @@ import com.remora.core.model.resurface.ResurfacedItem
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.ui.capture.SavePromptSheet
+import com.remora.ui.gallery.BulkImportItem
+import com.remora.ui.gallery.BulkImportState
+import com.remora.ui.gallery.BulkImportStatus
 import com.remora.ui.gallery.GalleryViewModel
 import com.remora.ui.resurfacing.ResurfacingScreen
 import com.remora.ui.search.SearchScreen
@@ -65,6 +83,7 @@ import com.remora.ui.search.SearchViewModel
 import com.remora.ui.settings.SettingsScreen
 import com.remora.ui.theme.RemoraBg
 import com.remora.ui.theme.RemoraBlue
+import com.remora.ui.theme.RemoraBlueSoft
 import com.remora.ui.theme.RemoraBorder
 import com.remora.ui.theme.RemoraNavyDark
 import com.remora.ui.theme.RemoraSubtleText
@@ -106,6 +125,8 @@ fun RemoraMainScreen(
     var currentTab by remember { mutableStateOf(initialTab) }
     var activePromptUri by remember { mutableStateOf<Uri?>(null) }
     var duplicateImport by remember { mutableStateOf<DuplicateImportPrompt?>(null) }
+    var bulkPick by remember { mutableStateOf<List<Uri>?>(null) }
+    val bulkState by galleryViewModel.bulkImportState.collectAsState()
 
     fun enqueueAnalysis(cardId: Long) {
         val request = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
@@ -160,6 +181,41 @@ fun RemoraMainScreen(
                     }
                 }
             )
+        }
+    }
+
+    /** Imports one batch image: hash -> dedup -> copy -> PENDING card -> enqueue. Runs on IO. */
+    suspend fun bulkImportOne(uriString: String): BulkImportStatus = withContext(Dispatchers.IO) {
+        val uri = Uri.parse(uriString)
+        val db = RemoraDatabase.getInstance(context)
+        val imageHash = try {
+            context.contentResolver.openInputStream(uri)?.use { HashUtil.sha256(it) }
+        } catch (e: Exception) {
+            Timber.w(e, "Bulk import: failed to hash image")
+            null
+        }
+        if (imageHash != null && db.memoryCardDao().getCardByImageHash(imageHash) != null) {
+            return@withContext BulkImportStatus.DUPLICATE
+        }
+        val persistentUri = try {
+            ImageImporter.copyUriToInternalStorage(context, uri)
+        } catch (e: Exception) {
+            Timber.w(e, "Bulk import: failed to copy image")
+            null
+        } ?: return@withContext BulkImportStatus.FAILED
+        val card = MemoryCard(
+            imageUri = persistentUri,
+            createdAt = System.currentTimeMillis(),
+            title = "Đang xử lý...",
+            status = ProcessingStatus.PENDING,
+            imageHash = imageHash
+        )
+        val newId = db.memoryCardDao().insertCardIfHashAbsent(MemoryCardEntity.fromDomainModel(card))
+        if (newId < 0) {
+            BulkImportStatus.DUPLICATE
+        } else {
+            enqueueAnalysis(newId)
+            BulkImportStatus.IMPORTED
         }
     }
 
@@ -375,6 +431,7 @@ fun RemoraMainScreen(
                                 }
                             }
                         },
+                        onBulkImport = { uris -> bulkPick = uris },
                         onNavigateToSearch = {
                             currentTab = MainNavigationTab.SEARCH
                             onTabSelected(MainNavigationTab.SEARCH)
@@ -510,6 +567,31 @@ fun RemoraMainScreen(
             onDismiss = { duplicateImport = null }
         )
     }
+
+    // Bulk import: explicit confirmation gate, then a per-image progress dialog.
+    bulkPick?.let { uris ->
+        BulkImportConfirmDialog(
+            count = uris.size,
+            onStart = {
+                galleryViewModel.bulkImport(uris.map { it.toString() }) { bulkImportOne(it) }
+                bulkPick = null
+            },
+            onDismiss = { bulkPick = null }
+        )
+    }
+
+    if (bulkState.active) {
+        BulkImportProgressDialog(
+            state = bulkState,
+            onRetryItem = { position ->
+                galleryViewModel.retryBulkItem(position) { bulkImportOne(it) }
+            },
+            onRetryAllFailed = {
+                galleryViewModel.retryAllFailed { bulkImportOne(it) }
+            },
+            onClose = { galleryViewModel.clearBulkImport() }
+        )
+    }
 }
 
 /** A gallery import whose SHA-256 matched an existing card; the user must choose (FR-026). */
@@ -567,4 +649,170 @@ private fun DuplicateCardDialog(
         containerColor = Color.White,
         shape = RoundedCornerShape(20.dp)
     )
+}
+
+@Composable
+private fun BulkImportConfirmDialog(
+    count: Int,
+    onStart: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Nhập $count ảnh vào Remora?",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = RemoraNavyDark
+            )
+        },
+        text = {
+            Text(
+                text = "Mỗi ảnh sẽ thành một thẻ và được gửi AI phân tích, theo quyền riêng tư bạn đã cấp. " +
+                    "Ảnh trùng nội dung với thẻ đã có sẽ được bỏ qua.",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = RemoraNavyDark.copy(alpha = 0.8f)
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onStart,
+                shape = RoundedCornerShape(percent = 50),
+                colors = ButtonDefaults.buttonColors(containerColor = RemoraNavyDark)
+            ) {
+                Text("Bắt đầu nhập", fontSize = 13.sp, color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy", fontSize = 13.sp, color = RemoraSubtleText)
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+private fun BulkImportProgressDialog(
+    state: BulkImportState,
+    onRetryItem: (Int) -> Unit,
+    onRetryAllFailed: () -> Unit,
+    onClose: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (!state.running) onClose() },
+        title = {
+            Text(
+                text = if (state.running) "Đang nhập ảnh ${minOf(state.done + 1, state.total)}/${state.total}"
+                else "Đã xử lý ${state.done}/${state.total} ảnh",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = RemoraNavyDark
+            )
+        },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                LinearProgressIndicator(
+                    progress = { if (state.total == 0) 0f else state.done.toFloat() / state.total },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp),
+                    color = RemoraBlue,
+                    trackColor = RemoraBlueSoft
+                )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    itemsIndexed(state.items) { position, item ->
+                        BulkImportRow(
+                            item = item,
+                            retryEnabled = !state.running,
+                            onRetry = { onRetryItem(position) }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!state.running && state.failures > 0) {
+                Button(
+                    onClick = onRetryAllFailed,
+                    shape = RoundedCornerShape(percent = 50),
+                    colors = ButtonDefaults.buttonColors(containerColor = RemoraNavyDark)
+                ) {
+                    Text("Thử lại ${state.failures} ảnh lỗi", fontSize = 13.sp, color = Color.White)
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) {
+                Text("Đóng", fontSize = 13.sp, color = RemoraBlue, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+private fun BulkImportRow(
+    item: BulkImportItem,
+    retryEnabled: Boolean,
+    onRetry: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        val labelAndTint = when (item.status) {
+            BulkImportStatus.QUEUED -> "đang chờ" to RemoraSubtleText
+            BulkImportStatus.RUNNING -> "đang xử lý" to RemoraBlue
+            BulkImportStatus.IMPORTED -> "đã nhập" to RemoraBlue
+            BulkImportStatus.DUPLICATE -> "trùng — đã bỏ qua" to RemoraSubtleText
+            BulkImportStatus.FAILED -> "không đọc được ảnh" to Color(0xFFEF4444)
+        }
+        when (item.status) {
+            BulkImportStatus.RUNNING -> CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = RemoraBlue
+            )
+            BulkImportStatus.IMPORTED -> Icon(
+                Icons.Outlined.CheckCircle, contentDescription = "đã nhập",
+                tint = RemoraBlue, modifier = Modifier.size(18.dp)
+            )
+            BulkImportStatus.DUPLICATE -> Icon(
+                Icons.Outlined.ContentCopy, contentDescription = "trùng, đã bỏ qua",
+                tint = RemoraSubtleText, modifier = Modifier.size(18.dp)
+            )
+            BulkImportStatus.FAILED -> Icon(
+                Icons.Outlined.ErrorOutline, contentDescription = "lỗi",
+                tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp)
+            )
+            BulkImportStatus.QUEUED -> Icon(
+                Icons.Outlined.Schedule, contentDescription = "đang chờ",
+                tint = RemoraSubtleText, modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = "Ảnh ${item.number}",
+            fontSize = 13.sp,
+            color = RemoraNavyDark,
+            modifier = Modifier.weight(1f)
+        )
+        Text(text = labelAndTint.first, fontSize = 12.sp, color = labelAndTint.second)
+        if (item.status == BulkImportStatus.FAILED && retryEnabled) {
+            Spacer(modifier = Modifier.width(6.dp))
+            TextButton(onClick = onRetry, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
+                Text("Thử lại", fontSize = 12.sp, color = RemoraBlue, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
 }

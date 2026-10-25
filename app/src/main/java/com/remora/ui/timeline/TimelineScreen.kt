@@ -75,6 +75,7 @@ fun TimelineScreen(
     cards: List<MemoryCard>,
     onRetryCard: (MemoryCard) -> Unit,
     onImportImage: (Uri, String?) -> Unit,
+    onBulkImport: (List<Uri>) -> Unit = {},
     onNavigateToSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -82,11 +83,15 @@ fun TimelineScreen(
     var selectedSubject by remember { mutableStateOf("tất cả") }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
 
+    // One entry point: picking a single image keeps the intent-note dialog,
+    // picking several goes straight to the bulk-import confirm flow.
     val photoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri ->
-        if (uri != null) {
-            pendingImportUri = uri
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+    ) { uris ->
+        when {
+            uris.isEmpty() -> Unit
+            uris.size == 1 -> pendingImportUri = uris.first()
+            else -> onBulkImport(uris)
         }
     }
 

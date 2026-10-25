@@ -15,8 +15,10 @@ import com.remora.data.local.entity.ResurfacingResultEntity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -31,6 +33,24 @@ data class ResurfacedState(
     val items: List<ResurfacedItem> = emptyList()
 )
 
+enum class BulkImportStatus { QUEUED, RUNNING, IMPORTED, DUPLICATE, FAILED }
+
+data class BulkImportItem(
+    val uriString: String,
+    val number: Int,
+    val status: BulkImportStatus = BulkImportStatus.QUEUED
+)
+
+data class BulkImportState(
+    val items: List<BulkImportItem> = emptyList(),
+    val running: Boolean = false
+) {
+    val total: Int get() = items.size
+    val done: Int get() = items.count { it.status != BulkImportStatus.QUEUED && it.status != BulkImportStatus.RUNNING }
+    val failures: Int get() = items.count { it.status == BulkImportStatus.FAILED }
+    val active: Boolean get() = items.isNotEmpty()
+}
+
 class GalleryViewModel(
     private val repository: MemoryCardRepository,
     private val resurfacingResultDao: ResurfacingResultDao,
@@ -39,6 +59,9 @@ class GalleryViewModel(
 ) : ViewModel() {
 
     private val selectedSourceCardId = kotlinx.coroutines.flow.MutableStateFlow<Long?>(null)
+
+    private val _bulkImportState = MutableStateFlow(BulkImportState())
+    val bulkImportState: StateFlow<BulkImportState> = _bulkImportState.asStateFlow()
 
     /**
      * Explicitly focuses the Resurfacing tab on a specific source card ID (e.g. from notification intent).
@@ -199,5 +222,76 @@ class GalleryViewModel(
             repository.deleteCard(cardId)
             resurfacingResultDao.deleteResultsForCard(cardId)
         }
+    }
+
+    /**
+     * Imports a batch of images one by one; [importOne] performs the platform work (hash,
+     * dedup check, copy, insert, enqueue) for a single URI string and reports the outcome.
+     * A batch is ignored while another one is running (no duplicate submissions).
+     */
+    fun bulkImport(uriStrings: List<String>, importOne: suspend (String) -> BulkImportStatus) {
+        if (_bulkImportState.value.running || uriStrings.isEmpty()) return
+        _bulkImportState.value = BulkImportState(
+            items = uriStrings.mapIndexed { i, uri -> BulkImportItem(uriString = uri, number = i + 1) },
+            running = true
+        )
+        viewModelScope.launch {
+            for (position in uriStrings.indices) {
+                runBulkPosition(position, importOne)
+            }
+            _bulkImportState.value = _bulkImportState.value.copy(running = false)
+        }
+    }
+
+    /** Re-runs one failed item; ignored while a batch (or retry pass) is running. */
+    fun retryBulkItem(position: Int, importOne: suspend (String) -> BulkImportStatus) {
+        if (_bulkImportState.value.running) return
+        val item = _bulkImportState.value.items.getOrNull(position) ?: return
+        _bulkImportState.value = _bulkImportState.value.copy(running = true)
+        viewModelScope.launch {
+            runBulkPosition(position, importOne)
+            _bulkImportState.value = _bulkImportState.value.copy(running = false)
+        }
+    }
+
+    /** Sequentially re-runs every failed item of the last batch. */
+    fun retryAllFailed(importOne: suspend (String) -> BulkImportStatus) {
+        val state = _bulkImportState.value
+        if (state.running) return
+        val failedPositions = state.items.indices.filter { state.items[it].status == BulkImportStatus.FAILED }
+        if (failedPositions.isEmpty()) return
+        _bulkImportState.value = state.copy(running = true)
+        viewModelScope.launch {
+            for (position in failedPositions) {
+                runBulkPosition(position, importOne)
+            }
+            _bulkImportState.value = _bulkImportState.value.copy(running = false)
+        }
+    }
+
+    private suspend fun runBulkPosition(position: Int, importOne: suspend (String) -> BulkImportStatus) {
+        val item = _bulkImportState.value.items.getOrNull(position) ?: return
+        updateBulkItem(position) { it.copy(status = BulkImportStatus.RUNNING) }
+        // importOne must never receive or log content: only the URI handle and a status come back.
+        val outcome = try {
+            importOne(item.uriString)
+        } catch (e: Exception) {
+            Timber.w(e, "Bulk import failed for item #${item.number}")
+            BulkImportStatus.FAILED
+        }
+        updateBulkItem(position) { it.copy(status = outcome) }
+    }
+
+    /** Hides the finished bulk dialog; never interrupts a running batch. */
+    fun clearBulkImport() {
+        if (_bulkImportState.value.running) return
+        _bulkImportState.value = BulkImportState()
+    }
+
+    private fun updateBulkItem(position: Int, transform: (BulkImportItem) -> BulkImportItem) {
+        val state = _bulkImportState.value
+        _bulkImportState.value = state.copy(
+            items = state.items.toMutableList().also { it[position] = transform(it[position]) }
+        )
     }
 }

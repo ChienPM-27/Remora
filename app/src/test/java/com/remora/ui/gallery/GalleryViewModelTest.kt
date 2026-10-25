@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -441,6 +442,121 @@ class GalleryViewModelTest {
         // Source card found, candidate 999 dropped by mapNotNull
         assertEquals(10L, viewModel.resurfacedState.value.sourceCard?.id)
         assertTrue(viewModel.resurfacedState.value.items.isEmpty())
+    }
+
+    @Test
+    fun bulkImport_processesEachImageAndStopsRunning() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+
+        viewModel.bulkImport(
+            uriStrings = listOf("content://a", "content://b", "content://c"),
+            importOne = { uri ->
+                when (uri) {
+                    "content://a" -> BulkImportStatus.IMPORTED
+                    "content://b" -> BulkImportStatus.DUPLICATE
+                    else -> BulkImportStatus.FAILED
+                }
+            }
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.bulkImportState.value
+        assertEquals(3, state.total)
+        assertEquals(3, state.done)
+        assertEquals(1, state.failures)
+        assertFalse(state.running)
+        assertEquals(
+            listOf(BulkImportStatus.IMPORTED, BulkImportStatus.DUPLICATE, BulkImportStatus.FAILED),
+            state.items.map { it.status }
+        )
+    }
+
+    @Test
+    fun bulkImport_failureMidBatchDoesNotStopRemainingImages() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        val processed = mutableListOf<String>()
+
+        viewModel.bulkImport(listOf("a", "b", "c")) { uri ->
+            processed.add(uri)
+            if (uri == "b") throw IllegalStateException("boom") else BulkImportStatus.IMPORTED
+        }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("a", "b", "c"), processed)
+        assertEquals(BulkImportStatus.FAILED, viewModel.bulkImportState.value.items[1].status)
+        assertEquals(BulkImportStatus.IMPORTED, viewModel.bulkImportState.value.items[2].status)
+    }
+
+    @Test
+    fun bulkImport_whileRunning_ignoresSecondBatch() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+
+        viewModel.bulkImport(listOf("a", "b")) { BulkImportStatus.IMPORTED }
+        viewModel.bulkImport(listOf("c")) { BulkImportStatus.IMPORTED }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2, viewModel.bulkImportState.value.total)
+    }
+
+    @Test
+    fun bulkImport_emptyList_isNoop() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+
+        viewModel.bulkImport(emptyList()) { BulkImportStatus.IMPORTED }
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0, viewModel.bulkImportState.value.total)
+        assertFalse(viewModel.bulkImportState.value.active)
+    }
+
+    @Test
+    fun retryBulkItem_rerunsOnlyTheFailedItem() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        viewModel.bulkImport(listOf("a", "b")) { uri ->
+            if (uri == "a") BulkImportStatus.FAILED else BulkImportStatus.IMPORTED
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        var retryCalls = 0
+        viewModel.retryBulkItem(0) { retryCalls++; BulkImportStatus.IMPORTED }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, retryCalls)
+        assertEquals(BulkImportStatus.IMPORTED, viewModel.bulkImportState.value.items[0].status)
+        assertEquals(BulkImportStatus.IMPORTED, viewModel.bulkImportState.value.items[1].status)
+        assertFalse(viewModel.bulkImportState.value.running)
+    }
+
+    @Test
+    fun retryAllFailed_retriesEveryFailedItemOnce() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        viewModel.bulkImport(listOf("a", "b", "c")) { uri ->
+            if (uri == "c") BulkImportStatus.IMPORTED else BulkImportStatus.FAILED
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val retried = mutableListOf<String>()
+        viewModel.retryAllFailed { uri -> retried.add(uri); BulkImportStatus.IMPORTED }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("a", "b"), retried)
+        assertEquals(0, viewModel.bulkImportState.value.failures)
+        assertFalse(viewModel.bulkImportState.value.running)
+    }
+
+    @Test
+    fun clearBulkImport_resetsStateAfterBatchFinishes() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        viewModel.bulkImport(listOf("a")) { BulkImportStatus.IMPORTED }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.clearBulkImport()
+
+        assertFalse(viewModel.bulkImportState.value.active)
     }
 
     @Test

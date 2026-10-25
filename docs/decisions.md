@@ -489,3 +489,13 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 * Bản đồ thời gian: `tuần trước` giữ nguyên rolling [now−14d, now−7d] (FR-014); **mới** `hai tuần trước` = rolling [now−21d, now−14d] (phần mở rộng nhất quán của quyết định rolling-window); **mới** `tuần này` = tuần lịch, ngày đầu tuần theo `WeekFields.of(Locale.getDefault())` (vi-VN mặc định thứ Hai), kết thúc = now. Các cụm còn lại giữ nguyên.
 * Strip chỉ xóa alias của rule thắng (longest-first), chủ đề tìm kiếm sống sót.
 * Test: `TimeResolverTest` 24 case (boundary ms, midnight, time+topic, time-only); benchmark fixture v1 cập nhật case "hai tuần trước" từ "known limitation" sang window đúng (21→14) — 216/216 unit test xanh.
+
+---
+
+## 23. Bulk Import nhiều ảnh từ Photo Picker (2026-10-26, branch `feat/privacy-and-import-hardening`)
+
+* **Một entry point:** nút "thêm ảnh" chuyển sang `PickMultipleVisualMedia(maxItems = 10)` — chọn 1 ảnh giữ nguyên dialog nhập intent cũ; chọn nhiều đi sang luồng bulk. Giới hạn 10 ảnh/batch để giữ thân thiện với rate limit (technical-plan item 33).
+* **Consent:** chọn ảnh KHÔNG tự import — dialog xác nhận ("Bắt đầu nhập") nêu rõ ảnh sẽ gửi AI theo consent đã cấp; worker vẫn re-check consent từng thẻ (default-deny). URI list không đi qua WorkManager Data (giới hạn kích thước): import điều phối trong `GalleryViewModel` (viewModelScope sống qua config change), enqueue từng thẻ qua `CardAnalyzeWorker` unique-work như cũ. KHÔNG tạo worker/pipeline AI mới.
+* **Dedup tích hợp:** mỗi ảnh hash SHA-256 → trùng thẻ hiện có = trạng thái "trùng — đã bỏ qua" (batch-level confirm FR-026); race-safe qua `insertCardIfHashAbsent`. Nếu app bị đóng giữa batch: các thẻ đã insert tiếp tục qua WorkManager, ảnh chưa copy bị bỏ (không có batch manifest — chấp nhận, ghi giới hạn).
+* **UI (Material 3, theo design system hiện tại):** dialog xác nhận; dialog tiến độ có LinearProgressIndicator + danh sách trạng thái từng ảnh (đang chờ/đang xử lý/đã nhập/trùng/lỗi — thông báo lỗi không tiết lộ nội dung OCR), "Thử lại" từng ảnh lỗi và "Thử lại N ảnh lỗi" hàng loạt; chặn batch trùng khi đang chạy; đóng dialog không hủy batch đang chạy. Icon trạng thái có contentDescription; Impeccable detector pass.
+* **Test:** `GalleryViewModelTest` 8 case bulk (xử lý tuần tự hết batch, 1 ảnh lỗi không làm mất batch, exception → FAILED, double-start ignore, retry từng ảnh/nhóm, clear state). Toàn bộ 223 unit test xanh.
