@@ -469,3 +469,23 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 * **Log nhạy cảm:** bỏ `parsed.embeddingText` khỏi log của `SemanticSearchEngine` (chỉ còn số card, time label, số terms). FR-025 mở rộng: cấm log raw search query.
 * **Giới hạn bắt buộc phải ghi nhận:** redaction chạy SAU OCR/AI extraction — bí mật nằm trong ảnh vẫn được gửi tới AI gateway cùng yêu cầu extraction. Giới hạn đã chấp nhận; redaction on-device trước upload là việc của tương lai. Spec FR-007 và data-model.md đã cập nhật đúng chính sách này.
 * **Test:** `SensitiveDataRedactorTest` (Luhn pass/fail, phân cách, false positive nội dung học tập, OTP có/không ngữ cảnh, password một dòng/hai dòng, CRLF, deterministic) và `CardRedactionTest` (mọi field của extraction DTO đều được redact; nội dung học tập giữ nguyên).
+
+---
+
+## 21. SHA-256 Dedup Tích hợp Production (Room v3) (2026-10-26, branch `feat/privacy-and-import-hardening`)
+
+* **Schema:** `memory_card` thêm cột `image_hash TEXT` NULLable + index `index_memory_card_image_hash` (Room **v3**, `MIGRATION_2_3` = ALTER TABLE + CREATE INDEX, không ghi đè dữ liệu; schema 3.json đã export khớp). Thẻ cũ giữ NULL: không bị xóa, không bị coi là "chắc chắn không trùng", đơn giản là không match khi dedup. Không backfill hash cho thẻ cũ (chấp nhận giới hạn, tránh đọc lại ảnh cũ trái consent).
+* **Luồng import từ gallery (FR-026 ask-user):** hash SHA-256 tính trên **byte gốc qua InputStream** (không load cả ảnh vào bộ nhớ) trước khi copy; nếu trùng thẻ hiện có → dialog 3 lựa chọn: "Dùng thẻ đã có" / "Lưu thẻ riêng" (`forceInsert` bypass) / "Hủy". Không tự gộp, không tự xóa.
+* **Luồng capture (notification SAVE + SavePromptSheet):** lưu hash khi insert; gặp ảnh trùng byte → giữ thẻ ĐẦU TIÊN, bỏ qua insert mới (không merge/xóa) — giữ nguyên semantics của URI-guard cũ vì notification không có mặt hỏi. Ask-user chỉ áp dụng ở surface có dialog (gallery import, bulk import).
+* **Race-safe:** `MemoryCardDao.insertCardIfHashAbsent` — @Transaction kiểm tra hash rồi insert, trả id âm của thẻ trùng nếu mất đua (hai import đồng thời không tạo được hai thẻ).
+* **Giới hạn đã ghi nhận:** SHA-256 chỉ bắt ảnh **byte-identical**; ảnh nén lại/resize/chỉnh sửa không trùng. Perceptual hashing nằm ngoài đợt này.
+* **Test:** `GalleryViewModelTest` (dup → onDuplicateFound, force bypass, mapping hash qua entity), `MemoryCardEntityTest` (round-trip hash + legacy null), 5 file test fake DAO cập nhật; `MigrationTest.migrate2To3_addsNullableImageHashPreservingCards` (androidTest — **chưa chạy được: không có emulator**, schema được đối chiếu tĩnh với 3.json).
+
+---
+
+## 22. TimeResolver: longest-phrase-first + "hai tuần trước" + "tuần này" (2026-10-26, branch `feat/privacy-and-import-hardening`)
+
+* Viết lại matching thành danh sách rule sắp xếp **phrase dài trước** — hết bug "hai tuần trước" rơi vào window "tuần trước".
+* Bản đồ thời gian: `tuần trước` giữ nguyên rolling [now−14d, now−7d] (FR-014); **mới** `hai tuần trước` = rolling [now−21d, now−14d] (phần mở rộng nhất quán của quyết định rolling-window); **mới** `tuần này` = tuần lịch, ngày đầu tuần theo `WeekFields.of(Locale.getDefault())` (vi-VN mặc định thứ Hai), kết thúc = now. Các cụm còn lại giữ nguyên.
+* Strip chỉ xóa alias của rule thắng (longest-first), chủ đề tìm kiếm sống sót.
+* Test: `TimeResolverTest` 24 case (boundary ms, midnight, time+topic, time-only); benchmark fixture v1 cập nhật case "hai tuần trước" từ "known limitation" sang window đúng (21→14) — 216/216 unit test xanh.

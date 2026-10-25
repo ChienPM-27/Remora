@@ -7,6 +7,7 @@ import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.entity.MemoryCardEntity
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MemoryCardEntityTest {
@@ -26,7 +27,8 @@ class MemoryCardEntityTest {
             embedding = floatArrayOf(0.12f, -0.34f, 0.56f, 0.78f),
             status = ProcessingStatus.DONE,
             attemptCount = 1,
-            errorCode = null
+            errorCode = null,
+            imageHash = "a3f5c8e0" + "b7d92f41"
         )
 
         val entity = MemoryCardEntity.fromDomainModel(originalCard)
@@ -35,6 +37,7 @@ class MemoryCardEntityTest {
         assertEquals("THEORY", entity.contentType)
         assertEquals("DONE", entity.status)
         assertEquals(1, entity.attemptCount)
+        assertEquals(originalCard.imageHash, entity.imageHash)
 
         val restoredCard = entity.toDomainModel()
         assertEquals(originalCard.id, restoredCard.id)
@@ -48,6 +51,20 @@ class MemoryCardEntityTest {
         assertEquals(originalCard.ocrText, restoredCard.ocrText)
         assertEquals(originalCard.status, restoredCard.status)
         assertEquals(originalCard.attemptCount, restoredCard.attemptCount)
+        assertEquals(originalCard.imageHash, restoredCard.imageHash)
         assertArrayEquals(originalCard.embedding, restoredCard.embedding, 1e-5f)
+    }
+
+    @Test
+    fun testLegacyCardWithoutHashMapsToNullHash() {
+        val legacyEntity = MemoryCardEntity(
+            id = 1L,
+            imageUri = "content://media/1",
+            createdAt = 1000L
+        )
+
+        assertNull(legacyEntity.imageHash)
+        assertNull(legacyEntity.toDomainModel().imageHash)
+        assertNull(MemoryCardEntity.fromDomainModel(legacyEntity.toDomainModel()).imageHash)
     }
 }

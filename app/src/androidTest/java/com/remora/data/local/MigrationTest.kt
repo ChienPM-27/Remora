@@ -59,4 +59,27 @@ class MigrationTest {
             assertFalse(cursor.moveToFirst())
         }
     }
+
+    @Test
+    fun migrate2To3_addsNullableImageHashPreservingCards() {
+        // Create DB at version 2 with an existing card (v2 schema has no image_hash column)
+        helper.createDatabase(testDbName + "-v2", 2).apply {
+            execSQL(
+                "INSERT INTO memory_card (image_uri, created_at, user_intent, title, summary, tags_json, " +
+                    "content_type, ocr_text, status, attempt_count) VALUES " +
+                    "('content://media/1', 1700000000000, 'ôn thi', 'Đạo hàm', 'tóm tắt', '{}', 'THEORY', 'text', 'DONE', 0)"
+            )
+            close()
+        }
+
+        val db = helper.runMigrationsAndValidate(testDbName + "-v2", 3, true, RemoraDatabase.MIGRATION_2_3)
+
+        // Legacy card survives with NULL hash: never dedup-matched, never dropped or rewritten.
+        db.query("SELECT id, image_uri, title, image_hash FROM memory_card").use { cursor ->
+            assertTrue(cursor.moveToFirst())
+            assertEquals("content://media/1", cursor.getString(cursor.getColumnIndexOrThrow("image_uri")))
+            assertEquals("Đạo hàm", cursor.getString(cursor.getColumnIndexOrThrow("title")))
+            assertTrue(cursor.isNull(cursor.getColumnIndexOrThrow("image_hash")))
+        }
+    }
 }

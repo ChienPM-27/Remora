@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import com.remora.data.local.entity.MemoryCardEntity
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,21 @@ interface MemoryCardDao {
 
     @Query("SELECT COUNT(*) FROM memory_card WHERE image_uri = :imageUri")
     suspend fun countCardsByImageUri(imageUri: String): Int
+
+    @Query("SELECT * FROM memory_card WHERE image_hash = :hash LIMIT 1")
+    suspend fun getCardByImageHash(hash: String): MemoryCardEntity?
+
+    /**
+     * Race-safe insert for byte-identical images: re-checks the hash inside one transaction so
+     * two concurrent imports cannot both create a card. Returns the new row id, or the existing
+     * duplicate's id negated (result < 0 means duplicate). Cards with a NULL hash always insert.
+     */
+    @Transaction
+    suspend fun insertCardIfHashAbsent(card: MemoryCardEntity): Long {
+        val hash = card.imageHash ?: return insertCard(card)
+        val existing = getCardByImageHash(hash)
+        return if (existing != null) -existing.id else insertCard(card)
+    }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCard(card: MemoryCardEntity): Long

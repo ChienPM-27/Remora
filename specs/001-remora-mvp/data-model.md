@@ -35,11 +35,13 @@ CREATE TABLE IF NOT EXISTS `memory_card` (
     `embedding` BLOB,
     `status` TEXT NOT NULL DEFAULT 'PENDING',
     `attempt_count` INTEGER NOT NULL DEFAULT 0,
-    `error_code` TEXT
+    `error_code` TEXT,
+    `image_hash` TEXT
 );
 
 CREATE INDEX IF NOT EXISTS `index_memory_card_created_at` ON `memory_card` (`created_at`);
 CREATE INDEX IF NOT EXISTS `index_memory_card_status` ON `memory_card` (`status`);
+CREATE INDEX IF NOT EXISTS `index_memory_card_image_hash` ON `memory_card` (`image_hash`);
 ```
 
 #### Field Specifications:
@@ -58,6 +60,7 @@ CREATE INDEX IF NOT EXISTS `index_memory_card_status` ON `memory_card` (`status`
 | `status` | `TEXT` | `ProcessingStatus` | Enum string: `PENDING`, `DONE`, `FAILED`. |
 | `attempt_count` | `INTEGER` | `Int` | Number of AI extraction attempts (max 3 before setting `FAILED`). |
 | `error_code` | `TEXT` | `String?` | Standard error code on failure: `TIMEOUT`, `QUOTA_EXCEEDED`, `NETWORK_OFFLINE`, `SCHEMA_ERROR`. |
+| `image_hash` | `TEXT` | `String?` | SHA-256 hex of the original image bytes (Room v3, migration 2→3). `NULL` for legacy cards — never treated as "unique", it simply does not dedup-match. Only byte-identical images match; recompressed/resized copies do not. |
 
 ---
 

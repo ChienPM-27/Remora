@@ -41,6 +41,7 @@ class ResurfacingManagerTest {
             store.value.firstOrNull { it.imageUri == imageUri }
         override suspend fun countCardsByImageUri(imageUri: String): Int =
             store.value.count { it.imageUri == imageUri }
+        override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
         override suspend fun insertCard(card: MemoryCardEntity): Long {
             val id = (store.value.maxOfOrNull { it.id } ?: 0L) + 1L
             store.value = (store.value + card.copy(id = id)).toMutableList()

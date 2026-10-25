@@ -229,7 +229,7 @@ So that I can connect new lessons with prior knowledge, review prerequisites, an
 
 - **MemoryCard (Thẻ tri thức):**
   - Represents a captured study asset.
-  - Attributes: identifier, local image URI, creation timestamp, user intent note, title, summary, subject, topics list, content type, OCR transcription, vector embedding, processing status (`PENDING`, `DONE`, `FAILED`), retry attempt count, error code.
+  - Attributes: identifier, local image URI, creation timestamp, user intent note, title, summary, subject, topics list, content type, OCR transcription, vector embedding, processing status (`PENDING`, `DONE`, `FAILED`), retry attempt count, error code, image content hash (SHA-256 of original bytes, nullable).
 - **ResurfacingLink (Liên kết gợi nhớ):**
   - Represents a discovered pedagogical connection between a newly saved card and a historical card.
   - Attributes: identifier, new card ID, candidate card ID, group (`SIMILAR`, `COMPLEMENTARY`, `ACTIONABLE`), relation (`DUPLICATE`, `SUPPLEMENT`, `EXPLANATION`, `CONTRADICTION`), new information, learning benefit, user-facing explanation reason, confidence score (> 0.80), creation timestamp.

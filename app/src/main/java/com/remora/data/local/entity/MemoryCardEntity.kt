@@ -13,7 +13,8 @@ import com.remora.core.model.entity.ProcessingStatus
     tableName = "memory_card",
     indices = [
         Index(value = ["created_at"]),
-        Index(value = ["status"])
+        Index(value = ["status"]),
+        Index(value = ["image_hash"])
     ]
 )
 data class MemoryCardEntity(
@@ -55,7 +56,11 @@ data class MemoryCardEntity(
     val attemptCount: Int = 0,
 
     @ColumnInfo(name = "error_code")
-    val errorCode: String? = null
+    val errorCode: String? = null,
+
+    // SHA-256 hex of the original image bytes; NULL for cards saved before this column existed.
+    @ColumnInfo(name = "image_hash")
+    val imageHash: String? = null
 ) {
     fun toDomainModel(): MemoryCard {
         val parsedTags = CardTagsCodec.decode(tagsJson)
@@ -82,7 +87,8 @@ data class MemoryCardEntity(
             embedding = floatEmbedding,
             status = try { ProcessingStatus.valueOf(status) } catch (_: Exception) { ProcessingStatus.PENDING },
             attemptCount = attemptCount,
-            errorCode = errorCode
+            errorCode = errorCode,
+            imageHash = imageHash
         )
     }
 
@@ -110,7 +116,8 @@ data class MemoryCardEntity(
                 embedding = byteEmbedding,
                 status = card.status.name,
                 attemptCount = card.attemptCount,
-                errorCode = card.errorCode
+                errorCode = card.errorCode,
+                imageHash = card.imageHash
             )
         }
     }

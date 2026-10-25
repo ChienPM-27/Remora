@@ -25,8 +25,9 @@ data class MemoryCard(
     val ocrText: String = "",                           // Toàn bộ văn bản đọc được trong ảnh
     val embedding: FloatArray? = null,                  // Vector 768 chiều L2-normalized
     val status: ProcessingStatus = ProcessingStatus.PENDING,
-    val attemptCount: Int = 0,                          // Số lần đã thử gọi AI
-    val errorCode: String? = null                       // Mã lỗi khi thất bại (TIMEOUT, QUOTA_EXCEEDED, etc.)
+    val attemptCount: Int = 0,                           // Số lần đã thử gọi AI
+    val errorCode: String? = null,                       // Mã lỗi khi thất bại (TIMEOUT, QUOTA_EXCEEDED, etc.)
+    val imageHash: String? = null                        // SHA-256 hex của byte ảnh gốc; null = chưa tính (thẻ cũ)
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -46,6 +47,7 @@ data class MemoryCard(
         if (status != other.status) return false
         if (attemptCount != other.attemptCount) return false
         if (errorCode != other.errorCode) return false
+        if (imageHash != other.imageHash) return false
         if (embedding != null) {
             if (other.embedding == null) return false
             if (!embedding.contentEquals(other.embedding)) return false
@@ -67,6 +69,7 @@ data class MemoryCard(
         result = 31 * result + status.hashCode()
         result = 31 * result + attemptCount.hashCode()
         result = 31 * result + (errorCode?.hashCode() ?: 0)
+        result = 31 * result + (imageHash?.hashCode() ?: 0)
         result = 31 * result + (embedding?.contentHashCode() ?: 0)
         return result
     }

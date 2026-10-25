@@ -30,6 +30,7 @@ class PendingCaptureQueueTest {
 
         override suspend fun countCardsByImageUri(imageUri: String): Int =
             cards.count { it.imageUri == imageUri }
+        override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
 
         override suspend fun insertCard(card: MemoryCardEntity): Long {
             val id = if (card.id == 0L) nextId++ else card.id

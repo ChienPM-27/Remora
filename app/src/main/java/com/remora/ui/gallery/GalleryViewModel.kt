@@ -10,6 +10,7 @@ import com.remora.core.model.entity.ResurfaceRelation
 import com.remora.core.model.resurface.ResurfacedItem
 import com.remora.data.local.dao.MemoryCardDao
 import com.remora.data.local.dao.ResurfacingResultDao
+import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.data.local.entity.ResurfacingResultEntity
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -164,21 +165,32 @@ class GalleryViewModel(
         }
     }
 
+    /**
+     * Creates a PENDING card for an imported image. When [imageHash] matches an existing card,
+     * no card is created and [onDuplicateFound] receives the existing card's id instead —
+     * unless [forceInsert] is set (the user explicitly chose "save as separate card").
+     */
     fun importCard(
         imageUri: String,
         userIntent: String? = null,
-        onCardCreated: (Long) -> Unit
+        imageHash: String? = null,
+        forceInsert: Boolean = false,
+        onCardCreated: (Long) -> Unit,
+        onDuplicateFound: (Long) -> Unit = {}
     ) {
-        viewModelScope.launch {
+        viewModelScope.launch(ioDispatcher) {
             val card = MemoryCard(
                 imageUri = imageUri,
                 createdAt = System.currentTimeMillis(),
                 userIntent = userIntent?.trim()?.ifBlank { null },
                 title = "Đang xử lý...",
-                status = ProcessingStatus.PENDING
+                status = ProcessingStatus.PENDING,
+                imageHash = imageHash
             )
-            val newId = repository.insertCard(card)
-            onCardCreated(newId)
+            val entity = MemoryCardEntity.fromDomainModel(card)
+            val result = if (forceInsert) memoryCardDao.insertCard(entity)
+            else memoryCardDao.insertCardIfHashAbsent(entity)
+            if (result < 0) onDuplicateFound(-result) else onCardCreated(result)
         }
     }
 

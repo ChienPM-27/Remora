@@ -21,6 +21,7 @@ object CaptureActionHandler {
         userIntent: String?,
         memoryCardDao: com.remora.data.local.dao.MemoryCardDao,
         consentGranted: Boolean = true,
+        imageHash: String? = null,
         onEnqueueWorker: (Long) -> Unit = {},
         onApplyCaptureAction: suspend (String) -> Unit = {},
         onSaveSuccess: () -> Unit = {},
@@ -44,11 +45,17 @@ object CaptureActionHandler {
                         createdAt = System.currentTimeMillis(),
                         userIntent = userIntent,
                         title = "Đang xử lý...",
-                        status = ProcessingStatus.PENDING
+                        status = ProcessingStatus.PENDING,
+                        imageHash = imageHash
                     )
-                    val newId = memoryCardDao.insertCard(MemoryCardEntity.fromDomainModel(card))
-                    Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
-                    onEnqueueWorker(newId)
+                    // Byte-identical images keep the FIRST card; nothing is merged or deleted.
+                    val newId = memoryCardDao.insertCardIfHashAbsent(MemoryCardEntity.fromDomainModel(card))
+                    if (newId < 0) {
+                        Timber.i("Byte-identical image of card #${-newId}; skipping duplicate insert")
+                    } else {
+                        Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
+                        onEnqueueWorker(newId)
+                    }
                 }
                 onSaveSuccess()
                 onResolve(imageUriStr)
@@ -95,6 +102,15 @@ class CaptureActionReceiver : BroadcastReceiver() {
                     // Consent is checked at action time, not at notification-post time: a stale
                     // notification must not save anything after consent has been revoked.
                     val consentGranted = db.appSettingDao().getSetting()?.consentGranted == true
+                    val imageHash = imageUriStr?.let {
+                        try {
+                            context.contentResolver.openInputStream(android.net.Uri.parse(it))
+                                ?.use { stream -> com.remora.util.HashUtil.sha256(stream) }
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to hash captured image")
+                            null
+                        }
+                    }
 
                     CaptureActionHandler.handleAction(
                         action = action,
@@ -102,6 +118,7 @@ class CaptureActionReceiver : BroadcastReceiver() {
                         userIntent = userIntent,
                         memoryCardDao = db.memoryCardDao(),
                         consentGranted = consentGranted,
+                        imageHash = imageHash,
                         onEnqueueWorker = { newId ->
                             // Unique per card to prevent duplicate concurrent runs
                             val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()

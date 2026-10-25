@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.FormatListBulleted
@@ -16,12 +17,16 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -33,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -63,6 +69,7 @@ import com.remora.ui.theme.RemoraBorder
 import com.remora.ui.theme.RemoraNavyDark
 import com.remora.ui.theme.RemoraSubtleText
 import com.remora.ui.timeline.TimelineScreen
+import com.remora.util.HashUtil
 import com.remora.util.ImageImporter
 import com.remora.work.CardAnalyzeWorker
 import kotlinx.coroutines.CoroutineScope
@@ -98,6 +105,63 @@ fun RemoraMainScreen(
     val store = remember(context) { PendingCaptureStore.getInstance(context) }
     var currentTab by remember { mutableStateOf(initialTab) }
     var activePromptUri by remember { mutableStateOf<Uri?>(null) }
+    var duplicateImport by remember { mutableStateOf<DuplicateImportPrompt?>(null) }
+
+    fun enqueueAnalysis(cardId: Long) {
+        val request = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
+            .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to cardId))
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.EXPONENTIAL,
+                30,
+                java.util.concurrent.TimeUnit.SECONDS
+            )
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            CardAnalyzeWorker.uniqueWorkName(cardId),
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
+
+    /** Copies the image, creates a PENDING card (hash-dedup aware) and enqueues analysis. */
+    fun importImageNow(uri: Uri, userIntent: String?, imageHash: String?, force: Boolean) {
+        scope.launch {
+            val persistentUri = withContext(Dispatchers.IO) {
+                try {
+                    ImageImporter.copyUriToInternalStorage(context, uri)
+                } catch (e: Exception) {
+                    Timber.e(e, "Failed to copy imported image")
+                    null
+                }
+            }
+            if (persistentUri == null) {
+                Toast.makeText(context, "Không thể đọc ảnh đã chọn", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            galleryViewModel.importCard(
+                imageUri = persistentUri,
+                userIntent = userIntent,
+                imageHash = imageHash,
+                forceInsert = force,
+                onCardCreated = { cardId ->
+                    enqueueAnalysis(cardId)
+                    scope.launch {
+                        Toast.makeText(context, "Đã thêm thẻ! AI đang xử lý...", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDuplicateFound = {
+                    scope.launch {
+                        Toast.makeText(context, "Ảnh này đã có trong Remora", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+    }
 
     // Observe pending captures reactively only when RESUMED
     LaunchedEffect(lifecycleOwner) {
@@ -283,57 +347,32 @@ fun RemoraMainScreen(
                         cards = cards,
                         onRetryCard = { card ->
                             galleryViewModel.retryCard(card) { cardId ->
-                                val request = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
-                                    .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to cardId))
-                                    .setConstraints(
-                                        Constraints.Builder()
-                                            .setRequiredNetworkType(NetworkType.CONNECTED)
-                                            .build()
-                                    )
-                                    .setBackoffCriteria(
-                                        androidx.work.BackoffPolicy.EXPONENTIAL,
-                                        30,
-                                        java.util.concurrent.TimeUnit.SECONDS
-                                    )
-                                    .build()
-                                WorkManager.getInstance(context).enqueueUniqueWork(
-                                    CardAnalyzeWorker.uniqueWorkName(cardId),
-                                    androidx.work.ExistingWorkPolicy.REPLACE,
-                                    request
-                                )
+                                enqueueAnalysis(cardId)
                             }
                         },
                         onImportImage = { uri, userIntent ->
-                            val persistentUri = try {
-                                ImageImporter.copyUriToInternalStorage(context, uri)
-                            } catch (e: Exception) {
-                                Timber.e(e, "Failed to copy imported image")
-                                null
-                            }
-                            if (persistentUri != null) {
-                                galleryViewModel.importCard(persistentUri, userIntent) { cardId ->
-                                    val request = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
-                                        .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to cardId))
-                                        .setConstraints(
-                                            Constraints.Builder()
-                                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                                .build()
-                                        )
-                                        .setBackoffCriteria(
-                                            androidx.work.BackoffPolicy.EXPONENTIAL,
-                                            30,
-                                            java.util.concurrent.TimeUnit.SECONDS
-                                        )
-                                        .build()
-                                    WorkManager.getInstance(context).enqueueUniqueWork(
-                                        CardAnalyzeWorker.uniqueWorkName(cardId),
-                                        androidx.work.ExistingWorkPolicy.REPLACE,
-                                        request
-                                    )
-                                    Toast.makeText(context, "Đã thêm thẻ! AI đang xử lý...", Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                // Hash the ORIGINAL bytes before copying: an identical image
+                                // must be detected no matter which URI it arrives from.
+                                val imageHash = withContext(Dispatchers.IO) {
+                                    try {
+                                        context.contentResolver.openInputStream(uri)
+                                            ?.use { HashUtil.sha256(it) }
+                                    } catch (e: Exception) {
+                                        Timber.w(e, "Failed to hash import image")
+                                        null
+                                    }
                                 }
-                            } else {
-                                Toast.makeText(context, "Không thể đọc ảnh đã chọn", Toast.LENGTH_SHORT).show()
+                                val existing = imageHash?.let {
+                                    withContext(Dispatchers.IO) {
+                                        RemoraDatabase.getInstance(context).memoryCardDao().getCardByImageHash(it)
+                                    }
+                                }
+                                if (existing != null) {
+                                    duplicateImport = DuplicateImportPrompt(uri, userIntent, imageHash, existing.toDomainModel())
+                                } else {
+                                    importImageNow(uri, userIntent, imageHash, force = false)
+                                }
                             }
                         },
                         onNavigateToSearch = {
@@ -394,34 +433,28 @@ fun RemoraMainScreen(
                     if (count > 0) {
                         Timber.i("SavePromptSheet: card already exists for $uri, skipping duplicate insert")
                     } else {
+                        val imageHash = try {
+                            context.contentResolver.openInputStream(uri)?.use { HashUtil.sha256(it) }
+                        } catch (e: Exception) {
+                            Timber.w(e, "Failed to hash captured image")
+                            null
+                        }
                         val card = MemoryCard(
                             imageUri = uri.toString(),
                             createdAt = System.currentTimeMillis(),
                             userIntent = intentText.trim().ifBlank { null },
                             title = "Đang xử lý...",
-                            status = ProcessingStatus.PENDING
+                            status = ProcessingStatus.PENDING,
+                            imageHash = imageHash
                         )
-                        val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
-                        Timber.i("Saved card #$newId from SavePromptSheet into Room SQLite")
-
-                        val workRequest = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
-                            .setConstraints(
-                                Constraints.Builder()
-                                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                                    .build()
-                            )
-                            .setBackoffCriteria(
-                                androidx.work.BackoffPolicy.EXPONENTIAL,
-                                30,
-                                java.util.concurrent.TimeUnit.SECONDS
-                            )
-                            .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to newId))
-                            .build()
-                        WorkManager.getInstance(context).enqueueUniqueWork(
-                            CardAnalyzeWorker.uniqueWorkName(newId),
-                            androidx.work.ExistingWorkPolicy.REPLACE,
-                            workRequest
-                        )
+                        // Byte-identical images keep the FIRST card; nothing is merged or deleted.
+                        val newId = db.memoryCardDao().insertCardIfHashAbsent(MemoryCardEntity.fromDomainModel(card))
+                        if (newId < 0) {
+                            Timber.i("SavePromptSheet: byte-identical image of card #${-newId}; skipping duplicate insert")
+                        } else {
+                            Timber.i("Saved card #$newId from SavePromptSheet into Room SQLite")
+                            enqueueAnalysis(newId)
+                        }
                     }
                 }
                 currentTab = MainNavigationTab.TIMELINE
@@ -462,4 +495,76 @@ fun RemoraMainScreen(
             }
         )
     }
+
+    duplicateImport?.let { prompt ->
+        DuplicateCardDialog(
+            existingTitle = prompt.existing.title.ifBlank { "Đang xử lý..." },
+            onUseExisting = {
+                duplicateImport = null
+                Toast.makeText(context, "Đã dùng thẻ có sẵn trong thư viện", Toast.LENGTH_SHORT).show()
+            },
+            onSaveSeparate = {
+                duplicateImport = null
+                importImageNow(prompt.uri, prompt.userIntent, prompt.imageHash, force = true)
+            },
+            onDismiss = { duplicateImport = null }
+        )
+    }
+}
+
+/** A gallery import whose SHA-256 matched an existing card; the user must choose (FR-026). */
+private data class DuplicateImportPrompt(
+    val uri: Uri,
+    val userIntent: String?,
+    val imageHash: String?,
+    val existing: MemoryCard
+)
+
+@Composable
+private fun DuplicateCardDialog(
+    existingTitle: String,
+    onUseExisting: () -> Unit,
+    onSaveSeparate: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Ảnh này đã có trong Remora",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = RemoraNavyDark
+            )
+        },
+        text = {
+            Text(
+                text = "Ảnh bạn chọn trùng nội dung với thẻ \"${existingTitle.take(60)}\". Bạn muốn xử lý thế nào?",
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = RemoraNavyDark.copy(alpha = 0.8f)
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onUseExisting,
+                shape = RoundedCornerShape(percent = 50),
+                colors = ButtonDefaults.buttonColors(containerColor = RemoraNavyDark)
+            ) {
+                Text("Dùng thẻ đã có", fontSize = 13.sp, color = Color.White)
+            }
+        },
+        dismissButton = {
+            androidx.compose.foundation.layout.Row {
+                TextButton(onClick = onSaveSeparate) {
+                    Text("Lưu thẻ riêng", fontSize = 13.sp, color = RemoraBlue, fontWeight = FontWeight.SemiBold)
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Hủy", fontSize = 13.sp, color = RemoraSubtleText)
+                }
+            }
+        },
+        containerColor = Color.White,
+        shape = RoundedCornerShape(20.dp)
+    )
 }

@@ -64,13 +64,20 @@ class GalleryViewModelTest {
         override suspend fun deleteAllResults() {}
     }
 
+    private val daoInserted = mutableListOf<MemoryCardEntity>()
+    private val hashLookup = mutableMapOf<String, MemoryCardEntity>()
+
     private val fakeCardDao = object : MemoryCardDao {
-        override suspend fun insertCard(card: MemoryCardEntity): Long = 1L
+        override suspend fun insertCard(card: MemoryCardEntity): Long {
+            daoInserted.add(card)
+            return daoInserted.size.toLong()
+        }
         override suspend fun updateCard(card: MemoryCardEntity) {}
         override suspend fun deleteCard(id: Long) {}
         override suspend fun getCardById(id: Long): MemoryCardEntity? = null
         override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = null
         override suspend fun countCardsByImageUri(imageUri: String): Int = 0
+        override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = hashLookup[hash]
         override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
         override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
         override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -97,18 +104,17 @@ class GalleryViewModelTest {
 
         viewModel.importCard(
             imageUri = "file:///data/user/0/com.remora/files/imported_images/test.jpg",
-            userIntent = "  ôn thi giữa kỳ toán  "
-        ) { id ->
-            capturedCardId = id
-        }
+            userIntent = "  ôn thi giữa kỳ toán  ",
+            onCardCreated = { id -> capturedCardId = id }
+        )
 
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(1, insertedCards.size)
-        val created = insertedCards.first()
+        assertEquals(1, daoInserted.size)
+        val created = daoInserted.first()
         assertEquals("file:///data/user/0/com.remora/files/imported_images/test.jpg", created.imageUri)
         assertEquals("ôn thi giữa kỳ toán", created.userIntent)
-        assertEquals(ProcessingStatus.PENDING, created.status)
+        assertEquals(ProcessingStatus.PENDING.name, created.status)
         assertEquals("Đang xử lý...", created.title)
         assertEquals(1L, capturedCardId)
     }
@@ -119,13 +125,68 @@ class GalleryViewModelTest {
 
         viewModel.importCard(
             imageUri = "file:///data/user/0/com.remora/files/imported_images/test2.jpg",
-            userIntent = "   "
-        ) {}
+            userIntent = "   ",
+            onCardCreated = { }
+        )
 
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(1, insertedCards.size)
-        assertNull(insertedCards.first().userIntent)
+        assertEquals(1, daoInserted.size)
+        assertNull(daoInserted.first().userIntent)
+    }
+
+    @Test
+    fun importCardWithKnownHashReportsDuplicateWithoutInserting() = runTest {
+        hashLookup["abc123"] = MemoryCardEntity(
+            id = 7L,
+            imageUri = "file:///existing",
+            createdAt = 1000L,
+            imageHash = "abc123"
+        )
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        var createdId: Long? = null
+        var duplicateId: Long? = null
+
+        viewModel.importCard(
+            imageUri = "file:///new-copy",
+            userIntent = null,
+            imageHash = "abc123",
+            onCardCreated = { createdId = it },
+            onDuplicateFound = { duplicateId = it }
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNull(createdId)
+        assertEquals(7L, duplicateId)
+        assertTrue(daoInserted.isEmpty())
+    }
+
+    @Test
+    fun importCardForceInsertBypassesHashDedup() = runTest {
+        hashLookup["abc123"] = MemoryCardEntity(
+            id = 7L,
+            imageUri = "file:///existing",
+            createdAt = 1000L,
+            imageHash = "abc123"
+        )
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        var createdId: Long? = null
+
+        viewModel.importCard(
+            imageUri = "file:///separate-copy",
+            userIntent = null,
+            imageHash = "abc123",
+            forceInsert = true,
+            onCardCreated = { createdId = it },
+            onDuplicateFound = { }
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1L, createdId)
+        assertEquals(1, daoInserted.size)
+        assertEquals("abc123", daoInserted.first().imageHash)
     }
 
     @Test
@@ -201,6 +262,7 @@ class GalleryViewModelTest {
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
             override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
             override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
+            override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(cardsMap.values.toList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -301,6 +363,7 @@ class GalleryViewModelTest {
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
             override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
             override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
+            override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -358,6 +421,7 @@ class GalleryViewModelTest {
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
             override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
             override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
+            override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -453,6 +517,7 @@ class GalleryViewModelTest {
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
             override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
             override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
+            override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -543,6 +608,7 @@ class GalleryViewModelTest {
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
             override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
             override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
+            override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
@@ -629,6 +695,7 @@ class GalleryViewModelTest {
             override suspend fun getCardById(id: Long): MemoryCardEntity? = cardsMap[id]
             override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? = cardsMap.values.find { it.imageUri == imageUri }
             override suspend fun countCardsByImageUri(imageUri: String): Int = cardsMap.values.count { it.imageUri == imageUri }
+            override suspend fun getCardByImageHash(hash: String): MemoryCardEntity? = null
             override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = flowOf(emptyList())
             override suspend fun getAllDoneCardsWithEmbedding(): List<MemoryCardEntity> = emptyList()
             override suspend fun getCandidatesExcluding(excludeId: Long): List<MemoryCardEntity> = emptyList()
