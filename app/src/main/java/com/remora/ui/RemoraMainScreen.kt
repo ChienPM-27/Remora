@@ -65,6 +65,7 @@ import com.remora.work.CardAnalyzeWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 import com.remora.ui.settings.SettingsViewModel
@@ -87,6 +88,7 @@ fun RemoraMainScreen(
     initialCaptureUri: Uri? = null,
     initialTab: MainNavigationTab = MainNavigationTab.TIMELINE,
     onTabSelected: (MainNavigationTab) -> Unit = {},
+    onClearInitialCaptureUri: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
@@ -97,15 +99,31 @@ fun RemoraMainScreen(
     // Observe incoming screenshot events emitted by ContentObserver or ScreenCaptureCallback
     LaunchedEffect(Unit) {
         CaptureEventManager.screenshotEvents.collect { uri ->
-            Timber.i("Foreground received screenshot event: $uri -> opening SavePromptSheet")
-            activeCaptureUri = uri
+            val db = RemoraDatabase.getInstance(context)
+            val exists = withContext(Dispatchers.IO) {
+                db.memoryCardDao().getCardByImageUri(uri.toString()) != null
+            }
+            if (!exists) {
+                Timber.i("Foreground received screenshot event: $uri -> opening SavePromptSheet")
+                activeCaptureUri = uri
+            } else {
+                Timber.i("Foreground received screenshot event for already saved uri: $uri -> ignoring")
+            }
         }
     }
 
     // Keep activeCaptureUri updated if MainActivity passes a new one via Intent
     LaunchedEffect(initialCaptureUri) {
         if (initialCaptureUri != null) {
-            activeCaptureUri = initialCaptureUri
+            val db = RemoraDatabase.getInstance(context)
+            val exists = withContext(Dispatchers.IO) {
+                db.memoryCardDao().getCardByImageUri(initialCaptureUri.toString()) != null
+            }
+            if (!exists) {
+                activeCaptureUri = initialCaptureUri
+            } else {
+                onClearInitialCaptureUri()
+            }
         }
     }
 
@@ -342,33 +360,40 @@ fun RemoraMainScreen(
                 NotificationHelper.dismissNotification(context)
                 val db = RemoraDatabase.getInstance(context)
                 scope.launch(Dispatchers.IO) {
-                    val card = MemoryCard(
-                        imageUri = uri.toString(),
-                        createdAt = System.currentTimeMillis(),
-                        userIntent = intentText.ifBlank { "ôn thi giữa kỳ" },
-                        title = "Đang xử lý...",
-                        status = ProcessingStatus.PENDING
-                    )
-                    val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
-                    Timber.i("Saved card #$newId from SavePromptSheet into Room SQLite")
-
-                    val workRequest = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
-                        .setConstraints(
-                            Constraints.Builder()
-                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build()
+                    val existing = db.memoryCardDao().getCardByImageUri(uri.toString())
+                    if (existing != null) {
+                        Timber.i("SavePromptSheet: card already exists for $uri (#${existing.id}), skipping duplicate insert")
+                    } else {
+                        val card = MemoryCard(
+                            imageUri = uri.toString(),
+                            createdAt = System.currentTimeMillis(),
+                            userIntent = intentText.ifBlank { "ôn thi giữa kỳ" },
+                            title = "Đang xử lý...",
+                            status = ProcessingStatus.PENDING
                         )
-                        .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to newId))
-                        .build()
-                    WorkManager.getInstance(context).enqueue(workRequest)
+                        val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
+                        Timber.i("Saved card #$newId from SavePromptSheet into Room SQLite")
+
+                        val workRequest = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
+                            .setConstraints(
+                                Constraints.Builder()
+                                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                                    .build()
+                            )
+                            .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to newId))
+                            .build()
+                        WorkManager.getInstance(context).enqueue(workRequest)
+                    }
                 }
                 activeCaptureUri = null
+                onClearInitialCaptureUri()
                 currentTab = MainNavigationTab.TIMELINE
                 onTabSelected(MainNavigationTab.TIMELINE)
             },
             onDismiss = {
                 NotificationHelper.dismissNotification(context)
                 activeCaptureUri = null
+                onClearInitialCaptureUri()
             },
             onMute1Hour = {
                 NotificationHelper.dismissNotification(context)
@@ -382,6 +407,7 @@ fun RemoraMainScreen(
                 }
                 Toast.makeText(context, "Đã tắt nhận diện ảnh chụp trong 1 giờ", Toast.LENGTH_SHORT).show()
                 activeCaptureUri = null
+                onClearInitialCaptureUri()
             },
             onPauseMonitoring = {
                 NotificationHelper.dismissNotification(context)
@@ -395,6 +421,7 @@ fun RemoraMainScreen(
                 }
                 Toast.makeText(context, "Đã tạm dừng nhận diện ảnh chụp", Toast.LENGTH_SHORT).show()
                 activeCaptureUri = null
+                onClearInitialCaptureUri()
             }
         )
     }

@@ -20,7 +20,11 @@ class CaptureActionReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         Timber.i("CaptureActionReceiver received action: $action")
 
-        NotificationHelper.dismissNotification(context)
+        if (action == NotificationHelper.ACTION_SAVE) {
+            NotificationHelper.showSaveSuccess(context)
+        } else {
+            NotificationHelper.dismissNotification(context)
+        }
 
         // Hold process execution with goAsync() during asynchronous background database insertion
         val pendingResult = goAsync()
@@ -32,33 +36,38 @@ class CaptureActionReceiver : BroadcastReceiver() {
                         NotificationHelper.ACTION_SAVE -> {
                             val imageUriStr = intent.getStringExtra(NotificationHelper.EXTRA_IMAGE_URI)
                             if (imageUriStr != null) {
-                                val remoteInputResults = RemoteInput.getResultsFromIntent(intent)
-                                val userIntent = remoteInputResults?.getCharSequence(NotificationHelper.EXTRA_USER_INTENT)?.toString()
-
                                 val db = RemoraDatabase.getInstance(context)
-                                val card = MemoryCard(
-                                    imageUri = imageUriStr,
-                                    createdAt = System.currentTimeMillis(),
-                                    userIntent = userIntent,
-                                    title = "Đang xử lý...",
-                                    status = ProcessingStatus.PENDING
-                                )
-                                val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
-                                Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
+                                val existingCard = db.memoryCardDao().getCardByImageUri(imageUriStr)
+                                if (existingCard != null) {
+                                    Timber.i("MemoryCard for uri $imageUriStr already exists (#${existingCard.id}), skipping duplicate insert")
+                                } else {
+                                    val remoteInputResults = RemoteInput.getResultsFromIntent(intent)
+                                    val userIntent = remoteInputResults?.getCharSequence(NotificationHelper.EXTRA_USER_INTENT)?.toString()
 
-                                // Enqueue background analysis worker
-                                val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
-                                    .setConstraints(
-                                        androidx.work.Constraints.Builder()
-                                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                            .build()
+                                    val card = MemoryCard(
+                                        imageUri = imageUriStr,
+                                        createdAt = System.currentTimeMillis(),
+                                        userIntent = userIntent,
+                                        title = "Đang xử lý...",
+                                        status = ProcessingStatus.PENDING
                                     )
-                                    .setInputData(
-                                        androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to newId)
-                                    )
-                                    .build()
+                                    val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
+                                    Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
 
-                                androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
+                                    // Enqueue background analysis worker
+                                    val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
+                                        .setConstraints(
+                                            androidx.work.Constraints.Builder()
+                                                .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
+                                                .build()
+                                        )
+                                        .setInputData(
+                                            androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to newId)
+                                        )
+                                        .build()
+
+                                    androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
+                                }
                             }
                         }
 

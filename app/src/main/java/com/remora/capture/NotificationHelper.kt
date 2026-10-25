@@ -132,7 +132,6 @@ object NotificationHelper {
             .setContentTitle("Phát hiện ảnh chụp bài giảng")
             .setContentText("Chạm để mở bảng lưu Remora hoặc nhập ghi chú")
             .setContentIntent(contentPendingIntent)
-            .setFullScreenIntent(contentPendingIntent, false)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .addAction(saveAction)
@@ -334,8 +333,22 @@ object NotificationHelper {
         )
     }
 
+    fun showSaveSuccess(context: Context) {
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setContentTitle("Đã lưu vào Remora")
+            .setContentText("AI đang phân tích bài học...")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setTimeoutAfter(1500L)
+            .setAutoCancel(true)
+            .build()
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
     fun dismissNotification(context: Context) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(NOTIFICATION_ID)
     }
 }
+

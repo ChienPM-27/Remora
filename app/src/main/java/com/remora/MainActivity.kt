@@ -195,6 +195,9 @@ class MainActivity : ComponentActivity() {
                                     galleryViewModel.selectSourceCard(null)
                                 }
                                 initialTab = tab
+                            },
+                            onClearInitialCaptureUri = {
+                                initialCaptureUri = null
                             }
                         )
                     }
@@ -213,12 +216,27 @@ class MainActivity : ComponentActivity() {
     private fun handleIncomingCaptureIntent(intent: Intent?) {
         val uriStr = intent?.getStringExtra(NotificationHelper.EXTRA_IMAGE_URI)
         if (!uriStr.isNullOrBlank()) {
-            val uri = Uri.parse(uriStr)
-            Timber.i("MainActivity received intent with capture uri: $uri")
-            initialCaptureUri = uri
-            CaptureEventManager.emitScreenshot(uri)
             intent.removeExtra(NotificationHelper.EXTRA_IMAGE_URI)
             intent.removeExtra(NotificationHelper.EXTRA_OPEN_SAVE_SHEET)
+            NotificationHelper.dismissNotification(this)
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                val db = RemoraDatabase.getInstance(applicationContext)
+                val existing = db.memoryCardDao().getCardByImageUri(uriStr)
+                if (existing != null) {
+                    Timber.i("MainActivity: card already exists for uri $uriStr (#${existing.id}), skipping SavePromptSheet")
+                    withContext(Dispatchers.Main) {
+                        initialTab = MainNavigationTab.TIMELINE
+                    }
+                } else {
+                    val uri = Uri.parse(uriStr)
+                    withContext(Dispatchers.Main) {
+                        Timber.i("MainActivity received intent with fresh capture uri: $uri")
+                        initialCaptureUri = uri
+                        CaptureEventManager.emitScreenshot(uri)
+                    }
+                }
+            }
         }
     }
 
