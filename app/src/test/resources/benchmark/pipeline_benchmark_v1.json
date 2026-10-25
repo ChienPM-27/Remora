@@ -54,7 +54,7 @@
     {"name": "hom-qua", "phrase": "hôm qua", "kind": "yesterday"},
     {"name": "thang-truoc", "phrase": "tháng trước", "kind": "previous_month"},
     {"name": "no-time", "phrase": "đại số tuyến tính ma trận", "kind": "none"},
-    {"name": "known-limitation-hai-tuan-truoc", "phrase": "hai tuần trước", "kind": "rolling", "start_days_ago": 14, "end_days_ago": 7, "note": "known limitation: substring match treats 'hai tuần trước' as 'tuần trước'; documented, not fixed in v1"}
+    {"name": "hai-tuan-truoc-fixed", "phrase": "hai tuần trước", "kind": "rolling", "start_days_ago": 21, "end_days_ago": 14, "note": "fixed 2026-10-26: longest-phrase-first resolver maps hai tuần trước to its own rolling window [now-21d, now-14d]"}
   ],
   "resurface_cases": [
     {"name": "all-valid", "items": [{"id": 101, "group": "SIMILAR", "relation": "SUPPLEMENT", "confidence": 0.9}, {"id": 102, "group": "COMPLEMENTARY", "relation": "EXPLANATION", "confidence": 0.88}], "allowed": [101, 102, 103], "expected": [101, 102]},
