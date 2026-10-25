@@ -242,6 +242,77 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - Dialog xác nhận `ImportCardDialog`: xem trước ảnh và cho phép người dùng nhập mục đích học tập (`user_intent`), sau đó lưu thẻ dưới dạng `PENDING` và gửi tác vụ xử lý sang WorkManager.
   - Toàn bộ 46/46 unit tests pass, `lintDebug`, `assembleDebug` thành công. Đã kiểm thử thực tế trên máy ảo: ảnh import được phân tích bởi Gemini qua Docker Gateway và chuyển trạng thái thành `DONE` trong vòng ~4.7s.
 
+---
+
+## 11. Tách cờ Đồng ý (Consent) khỏi Cờ Thông báo & Cập nhật Cài đặt theo Từng Cột (2026-10-24)
+
+* **Vấn đề phát hiện:**
+  - `ConsentViewModel` trước đây suy đoán trạng thái đồng ý từ `setting.notificationsEnabled`. Khi người dùng tắt thông báo (đặt `notificationsEnabled = false`), lần mở ứng dụng tiếp theo bị hiển thị lại màn hình đồng ý (Consent Screen).
+  - Có 4 vị trí gọi `insertOrUpdate(AppSettingEntity(id = 1L, ...))` làm mất cờ khác (ví dụ: "Tạm dừng" vô tình ghi đè `notificationsEnabled = true` và `pauseUntil = 0L`).
+  - Trạng thái `paused` chỉ được đặt lại `false` trong `grantConsent`, không có luồng độc lập tiếp tục theo dõi.
+* **Quyết định kỹ thuật:**
+  - Bổ sung cột `consent_granted` (Boolean, default `false`) vào bảng `app_setting`.
+  - Phân định rõ ngữ nghĩa 4 cờ trong `app_setting`:
+    - `consent_granted`: chỉ `ConsentViewModel` đọc/ghi để xác định người dùng đã qua bước onboarding/consent hay chưa.
+    - `notifications_enabled`: bật/tắt thông báo gợi nhớ (`resurfacing alert`).
+    - `paused`: tạm dừng theo dõi ảnh chụp cho đến khi người dùng tiếp tục.
+    - `pause_until`: thời điểm epoch ms tạm dừng có thời hạn (dùng cho tính năng "Tắt 1 giờ").
+  - Nâng cấp phiên bản Room từ 1 lên 2 với explicit migration:
+    - `ALTER TABLE app_setting ADD COLUMN consent_granted INTEGER NOT NULL DEFAULT 0;`
+    - `UPDATE app_setting SET consent_granted = 1;` (các dòng hiện có đều được tạo sau khi người dùng đã đồng ý).
+    - Xuất schema `2.json`, đăng ký `addMigrations(MIGRATION_1_2)` vào database builder cho mọi build, giữ `fallbackToDestructiveMigration()` ở debug.
+  - Cập nhật `AppSettingDao`: thêm `ensureRow()` (`INSERT OR IGNORE`) và các câu lệnh `UPDATE` theo từng cột độc lập: `setConsent`, `setPaused`, `setPauseUntil`, `setNotificationsEnabled`. Loại bỏ việc ghi đè toàn bộ entity bằng `insertOrUpdate`.
+  - Xây dựng logic thuần `CapturePolicy`:
+    - `isCaptureSuppressed(setting, nowMs) = paused || pauseUntil > nowMs` (với `setting == null` mặc định `false` - không bị chặn).
+    - `shouldShowResurfacingAlert(setting)` (với `setting == null` mặc định `true` - bật thông báo).
+  - Viết unit tests kiểm thử logic `CapturePolicy` và `ConsentViewModel` với fake DAO, viết `MigrationTest` (androidTest) kiểm chứng migration Room từ schema 1 lên schema 2.
+
+---
+
+## 12. Tối ưu Nút Thao tác trên Notification Chụp Màn hình & Tách Tạm dừng (2026-10-24)
+
+* **Bối cảnh & Giới hạn của Hệ điều hành Android:**
+  - Android SystemUI áp dụng giới hạn cứng: mỗi thông báo tương tác (`interactive notification`) chỉ hiển thị tối đa **3 nút hành động** (`NotificationCompat.Action`). Nếu khai báo từ nút thứ 4 trở đi, hệ thống sẽ tự động bỏ qua hoặc cắt bỏ trên hầu hết các launcher và panel thông báo.
+  - Trước đây thông báo phát hiện chụp màn hình khai báo 3 nút: "Lưu" (kèm `RemoteInput`), "Bỏ qua", và "Tạm dừng". Nút "Tắt 1 giờ" (`ACTION_MUTE_1H`) đã được định nghĩa nhưng chưa được gắn vào giao diện notification.
+* **Quyết định Kỹ thuật:**
+  - **Notification chụp màn hình duy trì đúng 3 nút:**
+    1. **Lưu**: Mở inline RemoteInput cho phép người dùng nhập trực tiếp ghi chú/user_intent (VD: "ôn thi giữa kỳ") và lưu thẻ dưới nền.
+    2. **Bỏ qua**: Đóng thông báo ngay lập tức, không lưu và không gửi bất kỳ dữ liệu nào rời khỏi máy.
+    3. **Tắt 1 giờ (`ACTION_MUTE_1H`)**: Tạm thời tắt nhận diện ảnh chụp trong 60 phút (`pause_until = now + 3_600_000ms`), thích hợp khi người dùng đang lướt mạng xã hội hoặc chụp ảnh cá nhân liên tục.
+  - **Chuyển "Tạm dừng" (vô thời hạn) sang Bottom Sheet & Màn hình Cài đặt:**
+    - Nút "Tạm dừng" được đưa vào footer của `SavePromptSheet` ("tắt 1 giờ" · "tạm dừng") và switch "Tự động nhận diện ảnh chụp" trên `SettingsScreen`.
+    - Tránh làm quá tải các hành động trên thanh thông báo, đồng thời đảm bảo người dùng có lựa chọn tắt nhanh 1 giờ tiện lợi ngay từ notification.
+  - **Xử lý Capture Action qua hàm thuần `applyCaptureAction`:**
+    - Tách biệt logic cập nhật cấu hình theo action thành hàm suspend `applyCaptureAction(action, dao, nowMs)`.
+    - `CaptureActionReceiver` thực hiện gọi hàm này bên trong khối `goAsync()` với timeout an toàn 8 giây.
+
+---
+
+## 13. Tối ưu Resurfacing: Khử Trùng Lặp Ứng Viên, Phân Nhóm Sư Phạm & Thông Báo Chi Tiết (2026-10-24)
+
+* **Vấn đề phát hiện:**
+  - `filterValidItems`: Kết quả gợi nhớ trả về từ LLM không khử trùng lặp `candidate_id`, dẫn đến một thẻ có thể xuất hiện ở nhiều nhóm khác nhau và việc giới hạn 2 mục/nhóm bị áp đặt theo thứ tự LLM thay vì độ tin cậy.
+  - `GalleryViewModel`: `resurfacedItems` trước đây lấy 20 kết quả mới nhất của tất cả các thẻ nguồn bị trộn lẫn, khiến tab Gợi nhớ hiển thị tiêu đề của thẻ mới nhất nhưng nội dung lại thuộc về các thẻ khác.
+  - Giao diện `ResurfacingScreen`: Danh sách phẳng, gọi `.lowercase()` làm hỏng các công thức toán, tên riêng và mã nguồn trong `title`/`reason`. Thông tin `new_info` và `benefit` chưa được hiển thị. Có code chết chưa sử dụng (`ResurfacingBanner`, `ResurfacingDetailDialog`).
+  - Thông báo gợi nhớ (`showResurfacingAlert`): Chỉ hiển thị câu chung chung "Có N liên kết hữu ích", không có nội dung sư phạm và chưa có PendingIntent điều hướng trực tiếp vào tab Gợi nhớ.
+
+* **Quyết định Kỹ thuật:**
+  1. **Khử trùng lặp và giới hạn 2 mục/nhóm (`ResurfaceValidator`):**
+     - Sắp xếp toàn bộ ứng viên hợp lệ theo `confidence` giảm dần.
+     - Khử trùng lặp theo `candidateId`: nếu một ứng viên xuất hiện ở nhiều nhóm, giữ lại bản ghi có confidence cao nhất; nếu hoà điểm, ưu tiên theo thứ tự nhóm `ACTIONABLE > COMPLEMENTARY > SIMILAR`.
+     - Sau khi khử trùng lặp mới áp dụng giới hạn tối đa 2 mục cho mỗi nhóm.
+  2. **Cô lập bộ kết quả theo thẻ nguồn mới nhất (`ResurfacingManager` & `GalleryViewModel`):**
+     - `ResurfacingManager` thực hiện xoá kết quả cũ của `newCardId` (`deleteResultsForCard`) trước khi chèn kết quả mới để tránh nhân đôi bản ghi khi phân tích lại.
+     - `ResurfacingResultDao` bổ sung truy vấn `getLatestSourceCardId()`. `GalleryViewModel` lắng nghe và chỉ tải kết quả của đúng thẻ nguồn mới nhất, không trộn lẫn kết quả của các thẻ khác nhau.
+  3. **Phân nhóm sư phạm và hiển thị chi tiết (`ResurfacingScreen`):**
+     - Chia thành 3 nhóm rõ ràng: "tương đồng" (`SIMILAR`), "bổ trợ" (`COMPLEMENTARY`), "có giá trị sử dụng" (`ACTIONABLE`).
+     - Từng thẻ hỗ trợ mở rộng (expandable) để xem chi tiết `new_info` (thông tin mới) và `benefit` (lợi ích học tập).
+     - Loại bỏ hoàn toàn `.lowercase()` trên `title` và `reason` để giữ nguyên vẹn ký hiệu toán học, hoa/thường và công thức.
+     - Xoá triệt để code chết `ResurfacingBanner.kt` và `ResurfacingDetailDialog.kt`.
+  4. **Thông báo BigTextStyle chi tiết kèm điều hướng trực tiếp (`NotificationHelper`):**
+     - Xây dựng nội dung BigTextStyle tối đa 3 dòng: `[nhóm] · [tiêu đề ứng viên] — [lý do]`, ưu tiên chọn ứng viên có confidence cao nhất từ mỗi nhóm.
+     - Cắt chuỗi an toàn không phá vỡ ký tự Unicode có dấu (NFC) hoặc ký tự xuống dòng.
+     - Thêm `EXTRA_OPEN_RESURFACING = true` vào PendingIntent (FLAG_IMMUTABLE) để MainActivity tự động chuyển sang tab Gợi nhớ khi người dùng chạm vào thông báo.
 
 
 
@@ -257,3 +328,135 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 * **Retry/HTTP (T041):** 413/422 permanent, 408/429/5xx retryable, MAX_RETRIES=3; 429 honor `Retry-After` bằng re-enqueue unique có initialDelay; mọi enqueue là `enqueueUniqueWork` + backoff exponential 30s. Gateway: forward `Retry-After`, hoàn quota khi upstream 429/5xx hoặc lỗi vận chuyển, timeout 45s, body 502 chung chung (không lộ `e.message`). AI-service: timeout → 504, Base64 sai → 400, log chỉ ghi status + mã lỗi upstream (không log raw body).
 * **Benchmark v1 (T035, một phần):** fixture versioned `app/src/test/resources/benchmark/pipeline_v1.json` (24 thẻ tổng hợp + ground truth tay). Kênh offline: temporal 8/8, resurfacing validation 10/10, tags 5/5, lexical micro P=0.786/R=1.000. Junk gate lộ lỗi thật ("công thức nấu ăn" khớp thẻ toán) → siết luật coverage lexical từ ≥1/2 sang ≥2/3 với query ≥3 term (có bằng chứng, R giữ 1.000). Kênh live-model (extraction/embedding/Stage-2 LLM) CHƯA đo được: môi trường không có `GEMINI_API_KEY`; quy trình đo đã ghi trong `docs/benchmark/report.md`.
 * **FTS (T044):** KHÔNG triển khai — kênh lexical on-device đã đạt R=1.0 trên fixture; FTS thêm chi phí schema/migration không có lợi ích đo được. Điều kiện mở lại đã ghi trong report.
+
+---
+
+## 14. Tinh chỉnh Cuối cùng & Hoàn thiện Luồng Trải nghiệm (2026-10-24)
+
+* **Điều hướng Thẻ nguồn từ Notification (`newCardId`):**
+  - Chạm vào notification gợi nhớ truyền `EXTRA_NEW_CARD_ID` vào `MainActivity`, kích hoạt `galleryViewModel.selectSourceCard(newCardId)`. Tab Gợi nhớ mở chính xác bộ kết quả của thẻ tương ứng trong notification. Khi vào tab bình thường (hoặc `cardId = null`), tab tự động theo dõi bộ kết quả của thẻ nguồn mới nhất.
+* **Xử lý Triệt để Hiện tượng Nháy Giao diện (Flicker) & Trạng thái Thẻ FAILED:**
+  - Trong `CardAnalyzeWorker`, chạy pipeline gợi nhớ và lưu kết quả trước khi cập nhật thẻ sang `DONE`. Điều này triệt tiêu hoàn toàn khoảng thời gian trễ khiến giao diện hiển thị nhầm "0 ký ức liên quan" trước khi có kết quả.
+  - Bổ sung trạng thái `LATEST_FAILED` trong `ResurfacingEmptyReason`: phân biệt rõ ranh giới giữa thẻ gặp lỗi phân tích (hiện icon lỗi và hướng dẫn thử lại) với trường hợp thẻ phân tích thành công nhưng không có liên kết đạt ngưỡng 80% (`NO_CONFIDENT_LINKS`).
+* **Ticker Tự động Cập nhật Màn hình Cài đặt khi Hết hạn Tắt 1 Giờ:**
+  - `SettingsScreenContent` sử dụng `produceState` với `delay(pauseUntil - now + 50L)`. Đúng thời điểm `pause_until` hết hạn, State tự động kích hoạt recompose, gạt switch sang BẬT và chuyển phụ đề về mặc định mà không cần người dùng thao tác hay pull-to-refresh.
+* **Ghi nhận Dependency `room-testing:2.6.1`:**
+  - Khai báo `androidx.room:room-testing:2.6.1` chỉ trong phạm vi `androidTestImplementation` để phục vụ `MigrationTestHelper` kiểm thử migration Room SQLite 1->2. Không làm tăng kích thước hay ảnh hưởng runtime của APK release.
+* **Rút gọn Kiến trúc `applyCaptureAction`:**
+  - Rút gọn việc bọc 3 lớp về một hàm duy nhất `CapturePolicy.applyCaptureAction(action, dao, nowMs)`, được gọi trực tiếp bởi `CaptureActionReceiver`, `RemoraMainScreen` và các unit test.
+
+---
+
+## 15. Tối ưu Hoàn thiện Sau Review (Task 8: Deep link Unpinning, Cô lập Lỗi Worker, Ticker ON_RESUME, Settings State) (2026-10-25)
+
+* **1. Deep Link Tab Gợi Nhớ (Unpinning & Lifecycle):**
+  - **Lỗi cũ:** Gọi `selectSourceCard(id)` làm tab Gợi nhớ bị ghim vĩnh viễn vào thẻ đó, không tự cập nhật khi người dùng lưu thẻ mới có kết quả mới. Chạm lại cùng một notification không mở lại tab do state không reset.
+  - **Quyết định kỹ thuật:**
+    - Coi lựa chọn từ notification là dùng một lần: tự động unpin (`selectedSourceCardId.value = null`) khi:
+      1) Người dùng chuyển sang tab khác trong bottom navigation bar (`currentTab != RESURFACE`).
+      2) Có thẻ mới hơn (`latestSourceId > explicitId`) được phân tích và lưu vào cơ sở dữ liệu.
+      3) Thẻ được ghim bị xoá khỏi Room hoặc không còn kết quả gợi nhớ.
+    - Trong `MainActivity.kt`: xoá `resurfacingLaunchTargetCardId = null` ngay sau khi đã gán vào ViewModel, đảm bảo nếu người dùng chạm lại cùng notification thì `LaunchedEffect` vẫn kích hoạt lại.
+* **2. Hoàn lại Thứ tự Worker & Cô lập Lỗi Resurfacing:**
+  - **Lỗi cũ:** Đặt resurfacing trước khi `updateCard(DONE)` khiến dữ liệu trích xuất chỉ nằm trong RAM; nếu worker bị kill/preempt giữa chừng thì mất kết quả và phải gọi lại Gemini từ đầu (tốn quota). `catch (Exception)` còn nuốt cả `CancellationException`.
+  - **Quyết định kỹ thuật:**
+    - Hoàn lại thứ tự chuẩn: lưu thẻ thành `DONE` vào SQLite trước, sau đó mới thực thi pipeline resurfacing.
+    - Bọc resurfacing bằng hàm `executeResurfacingWithIsolation` kèm `withTimeout(30_000L)`. Re-throw `CancellationException` để WorkManager quản lý hủy tiến trình chuẩn xác; chỉ nuốt lỗi nghiệp vụ khác để thẻ vẫn giữ trạng thái `DONE`.
+    - Chống nhấp nháy UI (Heuristic): trong `resolveResurfacingUiState`, nếu thẻ mới nhất là `DONE`, chưa có kết quả và `(nowMs - createdAt) < 90_000L` (90 giây), trả về trạng thái `LATEST_PENDING` ("đang phân tích liên kết tri thức..."). UI sử dụng `LaunchedEffect + delay` để tự động làm mới trạng thái sang `NO_CONFIDENT_LINKS` nếu hết 90 giây mà không có liên kết nào > 0.80.
+* **3. Ticker Hết Hạn Tắt 1 Giờ với `ON_RESUME`:**
+  - **Lỗi cũ:** Coroutine `delay()` sử dụng đồng hồ đơn điệu (monotonic time), nên việc chỉnh giờ hệ thống không kích hoạt ticker. Khi người dùng thu nhỏ app và mở lại sau khi hết giờ, UI có thể không cập nhật ngay.
+  - **Quyết định kỹ thuật:**
+    - Bổ sung `DisposableEffect(lifecycleOwner)` lắng nghe `Lifecycle.Event.ON_RESUME` trên `SettingsScreenContent` để lập tức cập nhật lại `effectiveNowMs = System.currentTimeMillis()`.
+    - Quy trình kiểm thử thủ công: Chờ đủ thời gian thực, hoặc trên bản debug tạm thời đổi hằng số `ONE_HOUR_MS` thành 1 phút (60_000ms). Không kiểm thử bằng cách chỉnh giờ hệ thống.
+* **4. Trạng thái Settings UI (`SettingsUiState`) & Chống Nháy Switch:**
+  - **Lỗi cũ:** `SettingsViewModel.setting` dùng `WhileSubscribed(5000)` với `initialValue = null`, khiến switch ở màn hình Cài đặt rơi vào fallback default (`true`) trong 1 frame đầu tiên trước khi DB emit dữ liệu.
+  - **Quyết định kỹ thuật:**
+    - Định nghĩa `sealed interface SettingsUiState { data object Loading : SettingsUiState; data class Loaded(val setting: AppSettingEntity?) : SettingsUiState }`.
+    - `SettingsScreenContent`: khi `uiState is SettingsUiState.Loading`, không vẽ switch (`if (!isLoading) Switch(...)`), loại bỏ hoàn toàn hiện tượng switch nhấp nháy giá trị mặc định khi cơ sở dữ liệu đang ở trạng thái paused.
+
+---
+
+## 16. Tối ưu Resurfacing Timeout & Chốt chặn Thẻ DONE (Task 9) (2026-10-25)
+
+* **1. Lý do Timeout Phải Bắt Riêng (`TimeoutCancellationException`):**
+  - Trong Kotlin Coroutines, `TimeoutCancellationException` là lớp con của `CancellationException`. Nếu chỉ dùng `catch (e: CancellationException)` để re-throw cho cooperative cancellation, thì khi pipeline gợi nhớ vượt quá thời gian timeout (`30_000L`), ngoại lệ timeout cũng bị ném ra ngoài, khiến `doWork()` của worker bị hủy và kết thúc thất bại thay vì thành công.
+  - Xử lý: Đặt `catch (e: TimeoutCancellationException)` đứng trước `catch (e: CancellationException)` trong `executeResurfacingWithIsolation`. Khi timeout, chỉ ghi log cảnh báo ngắn gọn (`cardId`, `timeoutMs`, không chứa dữ liệu nhạy cảm) và không ném lại; worker tiếp tục kết thúc `Result.success()` với thẻ đã lưu `DONE`.
+* **2. Giới hạn của Heuristic 90 Giây Tính từ `createdAt`:**
+  - Cửa sổ 90 giây trong `resolveResurfacingUiState` tính khoảng cách thời gian giữa thời điểm hiện tại (`nowMs`) và thời điểm tạo thẻ (`card.createdAt`).
+  - Trong kịch bản thiết bị mất mạng, máy bận hoặc WorkManager phải xếp hàng đợi lâu, thời gian trễ từ khi chụp/lưu thẻ đến khi worker bắt đầu phân tích có thể vượt quá hoặc gần hết 90 giây. Khi đó, ngay khi thẻ vừa chuyển `DONE`, cửa sổ 90 giây có thể đã hết hạn khiến giao diện chuyển sang `NO_CONFIDENT_LINKS` sớm hơn dự kiến.
+  - Đây là sự đánh đổi có chủ đích (tradeoff) để giữ kiến trúc tối giản và không thay đổi schema Room SQLite (không thêm cột `analyzed_at` hay `resurfacing_status` trong bản MVP).
+* **3. Chốt chặn Thẻ DONE ở Đầu Worker (`shouldSkipAnalysis`):**
+  - Ở đầu `doWork()`, kiểm tra nếu thẻ đã ở trạng thái `ProcessingStatus.DONE` và đã có vector embedding hợp lệ, lập tức trả về `Result.success()` mà không thực hiện gọi lại Gemini (bảo toàn quota AI và tiết kiệm tài nguyên mạng).
+* **4. Đơn vị Duy nhất Gọi `selectSourceCard(null)`:**
+  - Loại bỏ các lệnh gọi trùng lặp `selectSourceCard(null)` trực tiếp trong `RemoraMainScreen`. Toàn bộ việc unpin được tập trung tại một nơi duy nhất là callback `onTabSelected` trong `MainActivity.kt`.
+
+---
+
+## 17. Quản lý Trạng thái Ảnh chờ Quyết định (PendingCaptureStore & Lifecycle-Aware UI) (Task 10) (2026-10-25)
+
+* **1. Phân tích Nguyên nhân Lỗi (Root Causes):**
+  - `ScreenshotObserver` trước đây vừa gọi `CaptureEventManager.emitScreenshot` (mở sheet trong app) vừa gọi `NotificationHelper.showCapturePrompt` (bắn notification) mà không biết trạng thái foreground/background của ứng dụng.
+  - `CaptureActionReceiver` khi người dùng bấm Lưu/Bỏ qua/Tắt 1 giờ trên notification không đồng bộ xoá trạng thái UI in-memory (`activeCaptureUri`), khiến khi người dùng quay lại app vẫn bị hiện lại sheet cho ảnh đã quyết định.
+  - `CaptureEventManager` là `SharedFlow` không replay (`replay = 0`): nếu Activity bị huỷ khi ở nền hoặc chưa khởi động, sự kiện phát hiện ảnh chụp bị mất hoàn toàn, dẫn đến khi mở app không có prompt cho ảnh chưa quyết định.
+  - Tapping vào notification mở MainActivity kèm `EXTRA_IMAGE_URI` không được quản lý hàng đợi, dễ gây xung đột hoặc sót ảnh khi người dùng chụp liên tiếp nhiều ảnh.
+
+* **2. Thiết kế Hàng đợi Thuần & Bộ lưu trữ `PendingCaptureStore`:**
+  - Logic hàng đợi thuần (`PendingCaptureQueue`):
+    - Thêm mục lũy tiến (idempotent add) theo `uriString`: trùng URI không nhân đôi bản ghi. Hỗ trợ cờ `prioritize` để đưa ảnh vừa chạm từ notification lên đầu hàng đợi.
+    - Giới hạn tối đa 5 mục (`MAX_ITEMS = 5`), tự động loại bỏ mục cũ nhất khi vượt ngưỡng.
+    - Tự động tỉa (prune) các mục đã tồn tại quá 24 giờ (`TTL_MS = 24h`).
+    - Lớp bọc mỏng `PendingCaptureStore` sử dụng `SharedPreferences` (JSON) và phơi `pending: StateFlow<List<PendingCapture>>`. Không thêm dependency, không đổi schema Room SQLite.
+
+* **3. Cờ Trạng thái Foreground (`AppForegroundTracker`):**
+  - Cung cấp cờ `@Volatile var isForeground = false` được cập nhật tại `MainActivity.onStart()` và `MainActivity.onStop()`.
+  - Khi app đang ở foreground: chỉ gọi `store.markPending(uri)` (giao diện in-app tự kích hoạt sheet), KHÔNG phát notification chụp màn hình ra ngoài thanh thông báo hệ thống.
+  - Khi app ở background: gọi `store.markPending(uri)` và đồng thời đăng notification cho người dùng tương tác.
+
+* **4. Ma trận Trạng thái Giải phóng Quyết định (Resolve Points):**
+  - **`ACTION_SAVE` (từ notification hoặc sheet):** Lưu thẻ vào Room SQLite, lập tức gọi `store.resolve(uri)` và dismiss notification capture.
+  - **`ACTION_SKIP` / Bấm "Bỏ qua" / Vuốt đóng sheet:** Gọi `store.resolve(uri)` và dismiss notification.
+  - **`ACTION_MUTE_1H` / Bấm "Tắt 1 giờ":** Cập nhật `pause_until`, gọi `store.resolve(uri)` và dismiss notification.
+  - **`ACTION_PAUSE` / Bấm "Tạm dừng":** Cập nhật `paused = true`, gọi `store.resolve(uri)` và dismiss notification.
+  - **Hành vi Vuốt bỏ notification (không bấm nút):** KHÔNG gọi resolve. Ảnh vẫn nằm trong `PendingCaptureStore` để khi mở app người dùng vẫn được hỏi lưu.
+
+* **5. Chốt chặn Chống Đua (Race-condition Prevention) & UI Lifecycle:**
+  - `RemoraMainScreen` chỉ kích hoạt kiểm tra và hiển thị sheet khi lifecycle ở trạng thái `RESUMED` (`repeatOnLifecycle(Lifecycle.State.RESUMED)`).
+  - Trước khi hiện sheet cho bất kỳ URI nào, kiểm tra `memoryCardDao.countCardsByImageUri(uriString) > 0` hoặc ảnh không thể đọc (`openInputStream(uri) == null`). Nếu đã có thẻ hoặc ảnh hỏng/bị xoá, lập tức gọi `store.resolve(uri)` và chuyển sang ảnh kế tiếp trong hàng đợi.
+  - Khi một sheet được giải quyết (Lưu/Bỏ qua), `store.pending` tự động phát danh sách mới, UI lập tức hiển thị sheet cho ảnh tiếp theo nếu còn trong hàng đợi (ưu tiên ảnh mới nhất).
+
+---
+
+## 18. Tinh chỉnh Luồng Capture & Notification Kênh Riêng (Task 11) (2026-10-25)
+
+* **1. Giới hạn Tuổi Ảnh cho `ScreenCaptureCallback` (`MAX_SCREEN_CAPTURE_CALLBACK_AGE_SECONDS = 15s`):**
+  - Android 14+ `ScreenCaptureCallback` chỉ thông báo có sự kiện chụp màn hình mà không truyền kèm URI. App phải truy vấn `MediaStore` để lấy ảnh mới nhất.
+  - Nhằm tránh kéo lại ảnh cũ từ nhiều ngày trước nếu hệ thống phát callback muộn hoặc khi mở app, `queryLatestScreenshotUri` bổ sung tham số `maxAgeSeconds` (mặc định 15 giây) và kiểm tra bằng hàm thuần `isWithinMaxAge(dateAddedSeconds, nowSeconds, maxAgeSeconds)`.
+  - Nhánh callback này không đặt `prioritize = true` để giữ đúng thứ tự hàng đợi tự nhiên.
+
+* **2. Phân tách Ràng buộc URI trong `CaptureActionHandler`:**
+  - `ACTION_SAVE` và `ACTION_SKIP`: Bắt buộc cần `imageUriStr` hợp lệ (nếu null thì bỏ qua không thực hiện).
+  - `ACTION_MUTE_1H` và `ACTION_PAUSE`: Áp dụng chính sách chụp màn hình ngay lập tức (`onApplyCaptureAction`) kể cả khi `imageUriStr` là `null` (ví dụ intent từ widget hoặc shortcut không gắn URI). Chỉ gọi `onResolve(imageUriStr)` khi URI khác null.
+
+* **3. Notification Báo Lưu Thành công (`showSaveSuccess`) Kênh Riêng:**
+  - Không gọi `showSaveSuccess` ngay đầu `onReceive` của `CaptureActionReceiver`. Chỉ gọi sau khi insert thẻ vào Room SQLite thành công (hoặc khi phát hiện thẻ đã tồn tại). Nếu insert bị lỗi hoặc timeout, không báo thành công mà chỉ dọn notification để tránh thông báo sai lệch cho người dùng.
+  - Sử dụng kênh riêng `STATUS_CHANNEL_ID = "remora_status_channel"` với `importance = NotificationManager.IMPORTANCE_LOW`.
+  - Kênh này tắt rung (`enableVibration = false`), không hiện huy hiệu ứng dụng (`setShowBadge = false`) và không kích hoạt banner dạng heads-up.
+  - **Lý do loại bỏ `setFullScreenIntent(..., false)`:** Trên Android 12 đến 14, việc gọi `setFullScreenIntent(null, false)` để hủy heads-up có thể gây treo thông báo hoặc hành vi không xác định trên giao diện người dùng của một số OEM. Chuyển sang kênh riêng `IMPORTANCE_LOW` kết hợp `setTimeoutAfter(1500L)` đảm bảo thông báo xác nhận biến mất nhẹ nhàng sau 1.5 giây mà không cần can thiệp cờ toàn màn hình.
+
+* **4. Tỉa Mục Quá Hạn khi RESUMED (`store.prune()`):**
+  - Trong `RemoraMainScreen`, ngay khi ứng dụng vào trạng thái `Lifecycle.State.RESUMED`, gọi `store.prune()` trước khi `store.pending.collect` để dọn dẹp các ảnh chờ đã quá 24 giờ khỏi SharedPreferences.
+
+---
+
+## 19. Tích hợp AI Pipeline Hardening + Separate Consent Flag (2026-10-25, branch `integration/ai-consent-hardening`)
+
+* **Migration 1→2 default-deny:** bỏ `UPDATE app_setting SET consent_granted = 1` khỏi `MIGRATION_1_2`. Người dùng nâng cấp từ DB v1 giữ `consent_granted = 0` (default cột); consent chỉ được cấp bằng hành động rõ ràng trong `ConsentScreen`. Schema export `2.json` đã có `DEFAULT 0` — không đổi. `MigrationTest` (androidTest) đổi assertion sang `consent_granted = 0` và thêm case DB v1 không có dòng setting.
+* **Consent gate trên mọi đường capture:**
+  - `CaptureActionHandler.handleAction` nhận `consentGranted`; ACTION_SAVE khi chưa consent → không insert thẻ, không enqueue worker, vẫn resolve pending. `CaptureActionReceiver` đọc consent tại thời điểm action (notification cũ sau khi thu hồi không lưu được gì).
+  - `CardAnalyzeWorker.doWork` chặn phân tích nội dung chưa DONE khi `consentGranted != true` — thẻ giữ `PENDING`, trả `Result.success()` (không retry loop), không ảnh rời thiết bị.
+  - `ScreenshotObserver`/`ScreenCaptureCallback` đã check consent động mỗi event; service bị system restart cũng an toàn vì check nằm ở observer, không phải ở start service.
+  - Pending queue chỉ prompt (sheet) — chưa consent thì sheet không thể hiện vì main UI nằm sau `ConsentScreen`.
+* **Worker hợp nhất:** giữ cả(unique) embedding validation 768 + `shouldSkipAnalysis` fast-path + `executeResurfacingWithIsolation` (timeout 30s, re-throw `CancellationException`) + Result contract của ResurfacingManager + notification BigTextStyle mới + Retry-After re-enqueue unique.
+* **Resurfacing validator hợp nhất:** filter (confidence hữu hạn ∈ [0,1] và > 0.80, id hợp lệ, relation khớp group) → sort (confidence desc, ưu tiên ACTIONABLE > COMPLEMENTARY > SIMILAR) → dedupe theo candidateId (giữ confidence cao nhất) → cap 2/group. Test cũ "first occurrence" của AI branch đổi thành "highest confidence" theo contract Consent.
+* **Persistence:** giữ `replaceResultsForCard` (transaction delete+insert) của AI branch thay vì delete+insert rời của Consent branch.
+* **Lưu ý PENDING khi thu hồi consent:** thẻ PENDING khi consent bị thu hồi sẽ không tự re-enqueue khi consent được cấp lại (không có UI thu hồi trong MVP); người dùng có nút retry cho thẻ FAILED. Đánh đổi có chủ đích để không upload khi chưa có consent.

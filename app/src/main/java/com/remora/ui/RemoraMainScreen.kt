@@ -35,18 +35,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.workDataOf
-import com.remora.capture.CaptureEventManager
+import com.remora.capture.CapturePolicy
 import com.remora.capture.NotificationHelper
+import com.remora.capture.PendingCaptureStore
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
 import com.remora.core.model.resurface.ResurfacedItem
 import com.remora.data.local.RemoraDatabase
-import com.remora.data.local.entity.AppSettingEntity
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.ui.capture.SavePromptSheet
 import com.remora.ui.gallery.GalleryViewModel
@@ -65,7 +68,10 @@ import com.remora.work.CardAnalyzeWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
+
+import com.remora.ui.settings.SettingsViewModel
 
 enum class MainNavigationTab {
     TIMELINE,
@@ -78,31 +84,65 @@ enum class MainNavigationTab {
 fun RemoraMainScreen(
     galleryViewModel: GalleryViewModel,
     searchViewModel: SearchViewModel,
-    initialCaptureUri: Uri? = null,
+    settingsViewModel: SettingsViewModel = run {
+        val context = LocalContext.current
+        remember(context) { SettingsViewModel(RemoraDatabase.getInstance(context).appSettingDao()) }
+    },
+    initialTab: MainNavigationTab = MainNavigationTab.TIMELINE,
+    onTabSelected: (MainNavigationTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-    var currentTab by remember { mutableStateOf(MainNavigationTab.TIMELINE) }
-    var activeCaptureUri by remember { mutableStateOf<Uri?>(initialCaptureUri) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val store = remember(context) { PendingCaptureStore.getInstance(context) }
+    var currentTab by remember { mutableStateOf(initialTab) }
+    var activePromptUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Observe incoming screenshot events emitted by ContentObserver or ScreenCaptureCallback
-    LaunchedEffect(Unit) {
-        CaptureEventManager.screenshotEvents.collect { uri ->
-            Timber.i("Foreground received screenshot event: $uri -> opening SavePromptSheet")
-            activeCaptureUri = uri
+    // Observe pending captures reactively only when RESUMED
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            store.prune()
+            store.pending.collect { pendingList ->
+                // If active prompt is no longer in pending list (e.g. resolved externally), clear it
+                if (activePromptUri != null && pendingList.none { it.uriString == activePromptUri.toString() }) {
+                    activePromptUri = null
+                }
+                // If no sheet currently active, inspect pending queue for the next valid candidate
+                if (activePromptUri == null && pendingList.isNotEmpty()) {
+                    val db = RemoraDatabase.getInstance(context)
+                    for (item in pendingList) {
+                        val count = withContext(Dispatchers.IO) {
+                            db.memoryCardDao().countCardsByImageUri(item.uriString)
+                        }
+                        val uri = Uri.parse(item.uriString)
+                        val readable = withContext(Dispatchers.IO) {
+                            try {
+                                context.contentResolver.openInputStream(uri)?.use { true } ?: false
+                            } catch (e: Exception) {
+                                false
+                            }
+                        }
+                        if (count > 0 || !readable) {
+                            Timber.i("Pruning invalid/existing pending capture: ${item.uriString} (count=$count, readable=$readable)")
+                            store.resolve(item.uriString)
+                        } else {
+                            activePromptUri = uri
+                            break
+                        }
+                    }
+                }
+            }
         }
     }
 
-    // Keep activeCaptureUri updated if MainActivity passes a new one via Intent
-    LaunchedEffect(initialCaptureUri) {
-        if (initialCaptureUri != null) {
-            activeCaptureUri = initialCaptureUri
-        }
+    // Keep currentTab updated if MainActivity passes a new initialTab via Intent (e.g. from notification)
+    LaunchedEffect(initialTab) {
+        currentTab = initialTab
     }
 
     val cards by galleryViewModel.cards.collectAsState()
-    val roomResurfacedItems by galleryViewModel.resurfacedItems.collectAsState()
+    val resurfacedState by galleryViewModel.resurfacedState.collectAsState()
     val searchQuery by searchViewModel.query.collectAsState()
     val searchUiState by searchViewModel.uiState.collectAsState()
     val searchIsSearching by searchViewModel.isSearching.collectAsState()
@@ -119,7 +159,10 @@ fun RemoraMainScreen(
                 // 1. Tab: dòng thời gian (from 01-timeline.png)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.TIMELINE,
-                    onClick = { currentTab = MainNavigationTab.TIMELINE },
+                    onClick = {
+                        currentTab = MainNavigationTab.TIMELINE
+                        onTabSelected(MainNavigationTab.TIMELINE)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.TIMELINE) Icons.Filled.FormatListBulleted else Icons.Outlined.FormatListBulleted,
@@ -144,7 +187,10 @@ fun RemoraMainScreen(
                 // 2. Tab: tìm (from 02-search.png)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.SEARCH,
-                    onClick = { currentTab = MainNavigationTab.SEARCH },
+                    onClick = {
+                        currentTab = MainNavigationTab.SEARCH
+                        onTabSelected(MainNavigationTab.SEARCH)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.SEARCH) Icons.Filled.Search else Icons.Outlined.Search,
@@ -169,7 +215,10 @@ fun RemoraMainScreen(
                 // 3. Tab: gợi nhớ (from 03-resurface.png)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.RESURFACE,
-                    onClick = { currentTab = MainNavigationTab.RESURFACE },
+                    onClick = {
+                        currentTab = MainNavigationTab.RESURFACE
+                        onTabSelected(MainNavigationTab.RESURFACE)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.RESURFACE) Icons.Filled.AutoAwesome else Icons.Outlined.AutoAwesome,
@@ -194,7 +243,10 @@ fun RemoraMainScreen(
                 // 4. Tab: cài đặt (from mockups bottom bar)
                 NavigationBarItem(
                     selected = currentTab == MainNavigationTab.SETTINGS,
-                    onClick = { currentTab = MainNavigationTab.SETTINGS },
+                    onClick = {
+                        currentTab = MainNavigationTab.SETTINGS
+                        onTabSelected(MainNavigationTab.SETTINGS)
+                    },
                     icon = {
                         Icon(
                             imageVector = if (currentTab == MainNavigationTab.SETTINGS) Icons.Filled.Tune else Icons.Outlined.Tune,
@@ -284,7 +336,10 @@ fun RemoraMainScreen(
                                 Toast.makeText(context, "Không thể đọc ảnh đã chọn", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        onNavigateToSearch = { currentTab = MainNavigationTab.SEARCH }
+                        onNavigateToSearch = {
+                            currentTab = MainNavigationTab.SEARCH
+                            onTabSelected(MainNavigationTab.SEARCH)
+                        }
                     )
                 }
 
@@ -302,13 +357,15 @@ fun RemoraMainScreen(
 
                 MainNavigationTab.RESURFACE -> {
                     ResurfacingScreen(
-                        items = roomResurfacedItems,
+                        items = resurfacedState.items,
+                        sourceCard = resurfacedState.sourceCard,
                         latestCard = cards.firstOrNull()
                     )
                 }
 
                 MainNavigationTab.SETTINGS -> {
                     SettingsScreen(
+                        viewModel = settingsViewModel,
                         onClearAllCards = {
                             scope.launch(Dispatchers.IO) {
                                 val db = RemoraDatabase.getInstance(context)
@@ -322,65 +379,86 @@ fun RemoraMainScreen(
         }
     }
 
-    // Modal Save Prompt Sheet (04-save.png) when a screenshot is detected
-    activeCaptureUri?.let { uri ->
+    // Modal Save Prompt Sheet (04-save.png) when a pending capture is ready
+    activePromptUri?.let { uri ->
         SavePromptSheet(
             imageUri = uri,
             onSave = { intentText ->
                 NotificationHelper.dismissNotification(context)
+                store.resolve(uri)
+                activePromptUri = null
+
                 val db = RemoraDatabase.getInstance(context)
                 scope.launch(Dispatchers.IO) {
-                    val card = MemoryCard(
-                        imageUri = uri.toString(),
-                        createdAt = System.currentTimeMillis(),
-                        userIntent = intentText.trim().ifBlank { null },
-                        title = "Đang xử lý...",
-                        status = ProcessingStatus.PENDING
-                    )
-                    val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
-                    Timber.i("Saved card #$newId from SavePromptSheet into Room SQLite")
+                    val count = db.memoryCardDao().countCardsByImageUri(uri.toString())
+                    if (count > 0) {
+                        Timber.i("SavePromptSheet: card already exists for $uri, skipping duplicate insert")
+                    } else {
+                        val card = MemoryCard(
+                            imageUri = uri.toString(),
+                            createdAt = System.currentTimeMillis(),
+                            userIntent = intentText.trim().ifBlank { null },
+                            title = "Đang xử lý...",
+                            status = ProcessingStatus.PENDING
+                        )
+                        val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
+                        Timber.i("Saved card #$newId from SavePromptSheet into Room SQLite")
 
-                    val workRequest = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
-                        .setConstraints(
-                            Constraints.Builder()
-                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build()
+                        val workRequest = OneTimeWorkRequestBuilder<CardAnalyzeWorker>()
+                            .setConstraints(
+                                Constraints.Builder()
+                                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                                    .build()
+                            )
+                            .setBackoffCriteria(
+                                androidx.work.BackoffPolicy.EXPONENTIAL,
+                                30,
+                                java.util.concurrent.TimeUnit.SECONDS
+                            )
+                            .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to newId))
+                            .build()
+                        WorkManager.getInstance(context).enqueueUniqueWork(
+                            CardAnalyzeWorker.uniqueWorkName(newId),
+                            androidx.work.ExistingWorkPolicy.REPLACE,
+                            workRequest
                         )
-                        .setBackoffCriteria(
-                            androidx.work.BackoffPolicy.EXPONENTIAL,
-                            30,
-                            java.util.concurrent.TimeUnit.SECONDS
-                        )
-                        .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to newId))
-                        .build()
-                    WorkManager.getInstance(context).enqueueUniqueWork(
-                        CardAnalyzeWorker.uniqueWorkName(newId),
-                        androidx.work.ExistingWorkPolicy.REPLACE,
-                        workRequest
-                    )
+                    }
                 }
-                activeCaptureUri = null
                 currentTab = MainNavigationTab.TIMELINE
+                onTabSelected(MainNavigationTab.TIMELINE)
             },
             onDismiss = {
                 NotificationHelper.dismissNotification(context)
-                activeCaptureUri = null
+                store.resolve(uri)
+                activePromptUri = null
             },
-            onToggleNotifications = {
+            onMute1Hour = {
+                NotificationHelper.dismissNotification(context)
+                store.resolve(uri)
+                activePromptUri = null
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    val current = db.appSettingDao().getSetting() ?: AppSettingEntity(id = 1L)
-                    db.appSettingDao().insertOrUpdate(current.copy(notificationsEnabled = false))
+                    CapturePolicy.applyCaptureAction(
+                        NotificationHelper.ACTION_MUTE_1H,
+                        db.appSettingDao(),
+                        System.currentTimeMillis()
+                    )
                 }
-                activeCaptureUri = null
+                Toast.makeText(context, "Đã tắt nhận diện ảnh chụp trong 1 giờ", Toast.LENGTH_SHORT).show()
             },
             onPauseMonitoring = {
+                NotificationHelper.dismissNotification(context)
+                store.resolve(uri)
+                activePromptUri = null
                 scope.launch(Dispatchers.IO) {
                     val db = RemoraDatabase.getInstance(context)
-                    val current = db.appSettingDao().getSetting() ?: AppSettingEntity(id = 1L)
-                    db.appSettingDao().insertOrUpdate(current.copy(paused = true))
+                    CapturePolicy.applyCaptureAction(
+                        NotificationHelper.ACTION_PAUSE,
+                        db.appSettingDao(),
+                        System.currentTimeMillis()
+                    )
                 }
-                activeCaptureUri = null
+                Toast.makeText(context, "Đã tạm dừng nhận diện ảnh chụp", Toast.LENGTH_SHORT).show()
             }
         )
     }

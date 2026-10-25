@@ -52,32 +52,61 @@ object ResurfaceValidator {
         }
     }
 
+    private val ResurfaceGroup.priority: Int
+        get() = when (this) {
+            ResurfaceGroup.ACTIONABLE -> 3
+            ResurfaceGroup.COMPLEMENTARY -> 2
+            ResurfaceGroup.SIMILAR -> 1
+        }
+
     /**
      * Bộ lọc chuẩn hóa kết quả Resurfacing:
-     * 1. candidate_id khớp input hợp lệ (nếu truyền allowedCandidateIds), bỏ candidate bị lặp
-     * 2. confidence hữu hạn trong [0,1] và > 0.80 (dùng > thay vì >=)
-     * 3. relation phải khớp group
-     * 4. Tối đa 2 kết quả mỗi group
+     * 1. Lọc theo confidence hữu hạn trong [0,1] và > 0.80 (dùng > thay vì >=), id hợp lệ, relation khớp group.
+     * 2. Sắp theo confidence giảm dần; hoà thì ưu tiên ACTIONABLE > COMPLEMENTARY > SIMILAR.
+     * 3. Mỗi candidateId giữ một mục (confidence cao nhất, hoà thì theo thứ tự ưu tiên nhóm).
+     *    Đây là cách hiện thực "gộp khi trùng" (docs yêu cầu gộp khi Bổ trợ và Có giá trị sử dụng trùng).
+     * 4. Áp giới hạn tối đa 2 mục mỗi nhóm sau khi đã dedupe.
      */
     fun filterValidItems(
         items: List<ResurfacedItem>,
         allowedCandidateIds: Set<Long>? = null
     ): List<ResurfacedItem> {
-        val grouped = mutableMapOf<ResurfaceGroup, MutableList<ResurfacedItem>>()
-        val seenCandidateIds = mutableSetOf<Long>()
-        for (item in items) {
-            if (!item.confidence.isFinite()) continue
-            if (item.confidence < 0f || item.confidence > 1f) continue
-            if (item.confidence <= 0.80f) continue
-            if (allowedCandidateIds != null && !allowedCandidateIds.contains(item.candidateCard.id)) continue
-            if (!seenCandidateIds.add(item.candidateCard.id)) continue
-            if (!isValidRelationForGroup(item.group, item.relation)) continue
+        // 1. Lọc điều kiện cơ bản: confidence hữu hạn trong [0,1] và > 0.80, allowed IDs, quan hệ hợp lệ
+        val validItems = items.filter { item ->
+            item.confidence.isFinite() &&
+                item.confidence in 0f..1f &&
+                item.confidence > 0.80f &&
+                (allowedCandidateIds == null || allowedCandidateIds.contains(item.candidateCard.id)) &&
+                isValidRelationForGroup(item.group, item.relation)
+        }
 
-            val list = grouped.getOrPut(item.group) { mutableListOf() }
-            if (list.size < 2) {
-                list.add(item)
+        // 2. Sắp theo confidence giảm dần; hoà thì ưu tiên ACTIONABLE > COMPLEMENTARY > SIMILAR
+        val sortedItems = validItems.sortedWith(
+            compareByDescending<ResurfacedItem> { it.confidence }
+                .thenByDescending { it.group.priority }
+        )
+
+        // 3. Mỗi candidateId giữ đúng 1 mục có confidence cao nhất (hoà ưu tiên ACTIONABLE > COMPLEMENTARY > SIMILAR).
+        // Comment: Đây là cách hiện thực "gộp khi trùng" theo tài liệu thiết kế (tránh việc một thẻ xuất hiện ở nhiều nhóm).
+        val dedupedItems = mutableListOf<ResurfacedItem>()
+        val seenCandidateIds = mutableSetOf<Long>()
+        for (item in sortedItems) {
+            if (seenCandidateIds.add(item.candidateCard.id)) {
+                dedupedItems.add(item)
             }
         }
-        return grouped.values.flatten()
+
+        // 4. Áp giới hạn tối đa 2 mục mỗi nhóm sau khi đã dedupe
+        val groupCounts = mutableMapOf<ResurfaceGroup, Int>()
+        val result = mutableListOf<ResurfacedItem>()
+        for (item in dedupedItems) {
+            val count = groupCounts.getOrDefault(item.group, 0)
+            if (count < 2) {
+                groupCounts[item.group] = count + 1
+                result.add(item)
+            }
+        }
+
+        return result
     }
 }

@@ -57,8 +57,11 @@ Remora tuân thủ nguyên tắc **Bảo vệ quyền riêng tư học tập (Pr
   * `created_at`: `INTEGER NOT NULL`
 
 ### 2.3 Bảng `app_setting`
-* `notifications_enabled`: `BOOLEAN DEFAULT TRUE`
-* `paused`: `BOOLEAN DEFAULT FALSE`
+* `id`: `INTEGER PRIMARY KEY` (Row ID cố định `1L`)
+* `consent_granted`: `BOOLEAN NOT NULL DEFAULT FALSE` (Người dùng đã chấp thuận chính sách onboarding / quyền riêng tư; độc lập với cờ thông báo)
+* `notifications_enabled`: `BOOLEAN NOT NULL DEFAULT TRUE` (Bật/tắt thông báo gợi nhớ kiến thức resurfacing alert)
+* `paused`: `BOOLEAN NOT NULL DEFAULT FALSE` (Tạm dừng phát hiện và nhắc lưu ảnh chụp màn hình vô thời hạn)
+* `pause_until`: `INTEGER NOT NULL DEFAULT 0` (Thời điểm epoch timestamp ms kết thúc tạm dừng có thời hạn, ví dụ nút "Tắt 1 giờ")
 
 ---
 

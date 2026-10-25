@@ -86,9 +86,9 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - `app/src/main/java/com/remora/data/local/AppSettingDao.kt`
     - `app/src/main/java/com/remora/data/local/Converters.kt`
   - **Acceptance Criteria**:
-    - Tables `memory_card`, `resurfacing_result`, `app_setting` match `data-model.md`.
+    - Tables `memory_card`, `resurfacing_result`, `app_setting` match `data-model.md`. Room v2 explicit migration preserves user consent state.
     - `Converters.kt` serializes 768 Float32 arrays into 3,072-byte BLOBs (little-endian) and tags into JSON.
-    - Room DAOs expose reactive Kotlin `Flow<List<MemoryCard>>`.
+    - Room DAOs expose reactive Kotlin `Flow<List<MemoryCard>>`. Granular column updates for `app_setting` via `ensureRow()`, `setConsent`, `setPaused`, `setPauseUntil`, `setNotificationsEnabled`.
 
 - [x] **T006 [P0] [P] Implement image processing utilities (SHA-256 deduplication & compression)**
   - **File Paths**:
@@ -183,7 +183,7 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
     - `app/src/main/java/com/remora/ui/consent/ConsentViewModel.kt`
   - **Acceptance Criteria**:
     - Clear Vietnamese disclosure: "Ảnh chỉ rời thiết bị sau khi bấm Lưu; server không lưu ảnh".
-    - Stores consent state in `app_setting`. Screenshot monitoring only activates after consent granted.
+    - Stores consent state in `app_setting.consent_granted` (separated from `notifications_enabled`). Screenshot monitoring only activates after consent granted.
 
 - [x] **T015 [P0] [US2] Implement inline intent capture and PENDING card insertion**
   - **File Paths**:
@@ -321,14 +321,13 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 - [x] **T028 [P0] [US5] Implement Resurfacing result processor, Room persistence, and UI Presentation**
   - **File Paths**:
     - `app/src/main/java/com/remora/resurfacing/ResurfacingManager.kt`
-    - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingBanner.kt`
-    - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingDetailDialog.kt`
+    - `app/src/main/java/com/remora/ui/resurfacing/ResurfacingScreen.kt`
     - `app/src/main/java/com/remora/capture/NotificationHelper.kt`
     - `app/src/test/java/com/remora/resurfacing/ResurfacingFlowTest.kt`
   - **Acceptance Criteria**:
     - Triggered automatically by `CardAnalyzeWorker` immediately after card reaches `DONE` status.
     - Validates batch response using invariants from T025; saves to `resurfacing_result` table.
-    - Observes `resurfacingResultDao.getRecentResultsFlow()` in `GalleryViewModel` and presents banner on `RemoraMainScreen`.
+    - Observes `resurfacingResultDao.getLatestSourceCardIdFlow()` in `GalleryViewModel` and presents cards grouped pedagogically on `ResurfacingScreen`.
     - Dispatches high-value notification via `NotificationHelper.showResurfacingAlert`.
     - Shows 3 distinct groups with reasons and benefits; zero popups if result is empty `[]`.
 
@@ -367,9 +366,10 @@ description: "Actionable, dependency-ordered tasks list for Remora MVP implement
 
 ## Phase 9: Extensions & Post-MVP Enhancements (Priority: P1 / P2)
 
-- [ ] **T032 [P1] Settings Screen for screenshot monitoring and pause timer**
+- [x] **T032 [P1] Settings Screen for screenshot monitoring and pause timer**
   - **File Path**: `app/src/main/java/com/remora/ui/settings/SettingsScreen.kt`
   - **Acceptance Criteria**: Allows user to toggle capture on/off or pause for 1 hour.
+  - **Implementation Status**: Hoàn thành qua `SettingsViewModel` + `AppSettingDao`. Kết nối trực tiếp CSDL Room (`app_setting`), hỗ trợ bật/tắt tự động nhận diện ảnh chụp (cờ `paused`), hiển thị thời gian tạm dừng có thời hạn (`pause_until` / "Đang tắt đến HH:mm"), và bật/tắt thông báo gợi nhớ (`notifications_enabled`). Có bộ unit tests đầy đủ trong `SettingsViewModelTest`.
 
 - [ ] **T033 [P2] Full-Text Keyword Search (FTS) SQLite virtual table**
   - **File Path**: `app/src/main/java/com/remora/data/local/MemoryCardFtsDao.kt`

@@ -71,6 +71,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    sourceSets {
+        getByName("androidTest").assets.srcDirs(files("$projectDir/schemas"))
+    }
 }
 
 ksp {
@@ -123,6 +127,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     androidTestImplementation(libs.androidx.test.ext)
+    androidTestImplementation(libs.androidx.room.testing)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")

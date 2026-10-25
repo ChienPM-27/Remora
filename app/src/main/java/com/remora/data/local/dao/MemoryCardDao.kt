@@ -17,6 +17,12 @@ interface MemoryCardDao {
     @Query("SELECT * FROM memory_card WHERE id = :id LIMIT 1")
     suspend fun getCardById(id: Long): MemoryCardEntity?
 
+    @Query("SELECT * FROM memory_card WHERE image_uri = :imageUri LIMIT 1")
+    suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity?
+
+    @Query("SELECT COUNT(*) FROM memory_card WHERE image_uri = :imageUri")
+    suspend fun countCardsByImageUri(imageUri: String): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCard(card: MemoryCardEntity): Long
 

@@ -4,10 +4,10 @@ import com.remora.core.model.contract.VectorMath
 import com.remora.core.model.entity.MemoryCard
 import com.remora.data.local.dao.MemoryCardDao
 
-class Stage1CandidateSelector(
+open class Stage1CandidateSelector(
     private val dao: MemoryCardDao
 ) {
-    suspend fun selectTopCandidates(
+    open suspend fun selectTopCandidates(
         newCard: MemoryCard,
         topN: Int = 15
     ): List<MemoryCard> {

@@ -37,6 +37,10 @@ class ResurfacingManagerTest {
 
         override fun getAllCardsFlow(): Flow<List<MemoryCardEntity>> = store
         override suspend fun getCardById(id: Long): MemoryCardEntity? = store.value.firstOrNull { it.id == id }
+        override suspend fun getCardByImageUri(imageUri: String): MemoryCardEntity? =
+            store.value.firstOrNull { it.imageUri == imageUri }
+        override suspend fun countCardsByImageUri(imageUri: String): Int =
+            store.value.count { it.imageUri == imageUri }
         override suspend fun insertCard(card: MemoryCardEntity): Long {
             val id = (store.value.maxOfOrNull { it.id } ?: 0L) + 1L
             store.value = (store.value + card.copy(id = id)).toMutableList()
@@ -65,6 +69,8 @@ class ResurfacingManagerTest {
         override fun getRecentResultsFlow(): Flow<List<ResurfacingResultEntity>> = MutableStateFlow(rows.take(20))
         override suspend fun getResultsForCard(newCardId: Long): List<ResurfacingResultEntity> =
             rows.filter { it.newCardId == newCardId }
+        override fun getLatestSourceCardIdFlow(): Flow<Long?> = MutableStateFlow(rows.maxByOrNull { it.id }?.newCardId)
+        override suspend fun getLatestSourceCardId(): Long? = rows.maxByOrNull { it.id }?.newCardId
         override suspend fun deleteResultsForCard(newCardId: Long) { rows.removeAll { it.newCardId == newCardId } }
         override suspend fun deleteAllResults() { rows.clear() }
     }

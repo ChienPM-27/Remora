@@ -27,6 +27,12 @@ interface ResurfacingResultDao {
     @Query("SELECT * FROM resurfacing_result WHERE new_card_id = :newCardId ORDER BY confidence DESC")
     fun getResultsForCardFlow(newCardId: Long): Flow<List<ResurfacingResultEntity>>
 
+    @Query("SELECT new_card_id FROM resurfacing_result ORDER BY created_at DESC, id DESC LIMIT 1")
+    fun getLatestSourceCardIdFlow(): Flow<Long?>
+
+    @Query("SELECT new_card_id FROM resurfacing_result ORDER BY created_at DESC, id DESC LIMIT 1")
+    suspend fun getLatestSourceCardId(): Long?
+
     @Query("SELECT * FROM resurfacing_result ORDER BY created_at DESC LIMIT 20")
     fun getRecentResultsFlow(): Flow<List<ResurfacingResultEntity>>
 

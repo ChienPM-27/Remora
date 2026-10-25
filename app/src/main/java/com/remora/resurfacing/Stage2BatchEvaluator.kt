@@ -11,7 +11,7 @@ import com.remora.core.model.resurface.ResurfaceValidator
 import com.remora.core.model.resurface.ResurfacedItem
 import timber.log.Timber
 
-class Stage2BatchEvaluator(
+open class Stage2BatchEvaluator(
     private val client: AiGatewayClient
 ) {
     /**
@@ -19,7 +19,7 @@ class Stage2BatchEvaluator(
      * - Result.success(items): validated items; empty list means a valid negative case.
      * - Result.failure(cause): recoverable service/network error. Never conflated with the negative case.
      */
-    suspend fun evaluateBatch(
+    open suspend fun evaluateBatch(
         newCard: MemoryCard,
         candidates: List<MemoryCard>
     ): Result<List<ResurfacedItem>> {
@@ -80,8 +80,8 @@ class Stage2BatchEvaluator(
             )
         }
 
-        // Apply strict validation rules: finite confidence in (0.80, 1], allowed IDs, no duplicate
-        // candidate, group-relation compatibility, max 2 items per group
+        // Apply strict validation rules: finite confidence in [0,1] and > 0.80, allowed IDs, no duplicate
+        // candidate (highest confidence wins), group-relation compatibility, max 2 items per group
         return Result.success(ResurfaceValidator.filterValidItems(rawItems, allowedCandidateIds = candidateMap.keys))
     }
 }

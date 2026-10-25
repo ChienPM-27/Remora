@@ -58,7 +58,7 @@ fun SavePromptSheet(
     imageUri: Uri,
     onSave: (userIntent: String) -> Unit,
     onDismiss: () -> Unit,
-    onToggleNotifications: () -> Unit,
+    onMute1Hour: () -> Unit,
     onPauseMonitoring: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -248,11 +248,11 @@ fun SavePromptSheet(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "tắt thông báo",
+                                text = "tắt 1 giờ",
                                 fontSize = 12.sp,
                                 color = RemoraSubtleText,
                                 modifier = Modifier
-                                    .clickable(onClick = onToggleNotifications)
+                                    .clickable(onClick = onMute1Hour)
                                     .padding(horizontal = 6.dp, vertical = 4.dp)
                             )
                             Text(
@@ -261,7 +261,7 @@ fun SavePromptSheet(
                                 color = RemoraSubtleText
                             )
                             Text(
-                                text = "tạm dừng theo dõi",
+                                text = "tạm dừng",
                                 fontSize = 12.sp,
                                 color = RemoraSubtleText,
                                 modifier = Modifier

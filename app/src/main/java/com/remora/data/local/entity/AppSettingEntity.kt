@@ -10,6 +10,9 @@ data class AppSettingEntity(
     @ColumnInfo(name = "id")
     val id: Long = 1L,
 
+    @ColumnInfo(name = "consent_granted", defaultValue = "0")
+    val consentGranted: Boolean = false,
+
     @ColumnInfo(name = "notifications_enabled")
     val notificationsEnabled: Boolean = true,
 

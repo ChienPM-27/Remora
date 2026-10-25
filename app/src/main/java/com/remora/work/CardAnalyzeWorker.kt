@@ -13,6 +13,8 @@ import androidx.work.workDataOf
 import com.remora.RemoraApp
 import com.remora.ai.AiGatewayClient
 import com.remora.ai.ApiException
+import com.remora.capture.CapturePolicy
+import com.remora.capture.NotificationHelper
 import com.remora.core.model.contract.VectorMath
 import com.remora.core.model.entity.CardTags
 import com.remora.core.model.entity.ContentType
@@ -21,8 +23,13 @@ import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.local.entity.MemoryCardEntity
 import com.remora.util.ImageCompressor
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
+
+const val RESURFACING_TIMEOUT_MS = 30_000L
 
 class CardAnalyzeWorker(
     appContext: Context,
@@ -36,6 +43,21 @@ class CardAnalyzeWorker(
         val db = RemoraDatabase.getInstance(applicationContext)
         val cardEntity = db.memoryCardDao().getCardById(cardId) ?: return Result.failure()
         val card = cardEntity.toDomainModel()
+
+        // Consent gate (default-deny): without explicit consent, pending content is never
+        // processed or uploaded. The card stays PENDING; no image leaves the device.
+        if (card.status != ProcessingStatus.DONE &&
+            db.appSettingDao().getSetting()?.consentGranted != true
+        ) {
+            Timber.i("Analysis deferred for MemoryCard #$cardId: capture consent not granted")
+            return Result.success()
+        }
+
+        // Guard: if already DONE with valid embedding, return success immediately without re-calling AI
+        if (shouldSkipAnalysis(card)) {
+            Timber.i("MemoryCard #$cardId is already DONE with embedding; skipping analysis.")
+            return Result.success()
+        }
 
         Timber.i("Starting analysis for MemoryCard #$cardId (current attempts: ${card.attemptCount})")
 
@@ -97,7 +119,7 @@ class CardAnalyzeWorker(
                 )
             }
 
-            // 5. Update Room database to DONE
+            // 5. Update Room database to DONE first so extraction result is never lost if resurfacing fails or cancels
             val updatedCard = card.copy(
                 title = extracted.title.take(80),
                 summary = extracted.summary,
@@ -108,30 +130,39 @@ class CardAnalyzeWorker(
                 status = ProcessingStatus.DONE,
                 errorCode = null
             )
-
             db.memoryCardDao().updateCard(MemoryCardEntity.fromDomainModel(updatedCard))
             Timber.i("Successfully analyzed and saved MemoryCard #$cardId as DONE")
 
-            // 6. Trigger Resurfacing pipeline and save results to Room.
-            // A resurfacing service error must not revert the card's DONE analysis status.
+            // 6. Trigger Resurfacing pipeline with isolated error handling and timeout.
+            // A resurfacing service error or timeout must not revert the card's DONE analysis status.
             val resurfacingManager = remoraApp?.container?.resurfacingManager
             if (resurfacingManager != null && updatedCard.embedding != null) {
-                val resurfacingOutcome = resurfacingManager.runResurfacingPipeline(updatedCard)
-                resurfacingOutcome.onSuccess { resurfacedItems ->
-                    if (resurfacedItems.isNotEmpty()) {
-                        com.remora.capture.NotificationHelper.showResurfacingAlert(
-                            context = applicationContext,
-                            cardTitle = updatedCard.title,
-                            matchCount = resurfacedItems.size
-                        )
-                    }
-                }.onFailure { cause ->
-                    Timber.w(cause, "Resurfacing failed with a service error; card #${updatedCard.id} stays DONE")
+                executeResurfacingWithIsolation(updatedCard) { targetCard ->
+                    resurfacingManager.runResurfacingPipeline(targetCard)
+                        .onSuccess { resurfacedItems ->
+                            if (resurfacedItems.isNotEmpty()) {
+                                val setting = db.appSettingDao().getSetting()
+                                if (CapturePolicy.shouldShowResurfacingAlert(setting)) {
+                                    NotificationHelper.showResurfacingAlert(
+                                        context = applicationContext,
+                                        sourceCardTitle = targetCard.title,
+                                        resurfacedItems = resurfacedItems,
+                                        newCardId = targetCard.id
+                                    )
+                                }
+                            }
+                        }
+                        .onFailure { cause ->
+                            Timber.w(cause, "Resurfacing failed with a service error; card #${targetCard.id} stays DONE")
+                        }
                 }
             }
 
             return Result.success()
 
+        } catch (e: CancellationException) {
+            Timber.w("CardAnalyzeWorker cancelled for card #$cardId")
+            throw e
         } catch (e: Exception) {
             Timber.e(e, "Unexpected exception analyzing MemoryCard #$cardId")
             return handleFailure(db, card, e)
@@ -206,5 +237,54 @@ class CardAnalyzeWorker(
         const val MAX_ERROR_CODE_LENGTH = 200
 
         fun uniqueWorkName(cardId: Long): String = "card-analysis-$cardId"
+    }
+}
+
+/**
+ * Fast-path predicate: returns true if the card has already reached [ProcessingStatus.DONE]
+ * and possesses a non-empty embedding, indicating analysis is already complete.
+ */
+internal fun shouldSkipAnalysis(card: MemoryCard): Boolean {
+    val emb = card.embedding
+    return card.status == ProcessingStatus.DONE && emb != null && emb.isNotEmpty()
+}
+
+/**
+ * Executes [extractCard] only if the card is not already [ProcessingStatus.DONE] with embedding.
+ * Returns true if analysis was performed, false if skipped.
+ */
+internal suspend fun analyzeCardIfRequired(
+    card: MemoryCard,
+    extractCard: suspend () -> Unit
+): Boolean {
+    if (shouldSkipAnalysis(card)) {
+        return false
+    }
+    extractCard()
+    return true
+}
+
+/**
+ * Isolated runner for resurfacing pipeline with strict timeout and exception isolation.
+ * Catches [TimeoutCancellationException] separately without re-throwing, ensuring a timeout never fails the worker.
+ * Re-throws standard [CancellationException] to honor coroutine cancellation.
+ * Swallows other exceptions so a resurfacing failure never invalidates an already-completed [ProcessingStatus.DONE] card.
+ */
+internal suspend fun executeResurfacingWithIsolation(
+    card: MemoryCard,
+    timeoutMs: Long = RESURFACING_TIMEOUT_MS,
+    runPipeline: suspend (MemoryCard) -> Unit
+) {
+    try {
+        withTimeout(timeoutMs) {
+            runPipeline(card)
+        }
+    } catch (e: TimeoutCancellationException) {
+        Timber.w("Resurfacing pipeline timed out after ${timeoutMs}ms for card #${card.id}")
+    } catch (e: CancellationException) {
+        Timber.w("Resurfacing pipeline cancelled for card #${card.id}")
+        throw e
+    } catch (e: Exception) {
+        Timber.w(e, "Resurfacing pipeline failed silently; card #${card.id} remains DONE")
     }
 }

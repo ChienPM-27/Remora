@@ -3,7 +3,6 @@ package com.remora.ui.consent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.remora.data.local.dao.AppSettingDao
-import com.remora.data.local.entity.AppSettingEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +18,7 @@ class ConsentViewModel(
     init {
         viewModelScope.launch {
             val setting = appSettingDao.getSetting()
-            if (setting != null && setting.notificationsEnabled) {
+            if (setting != null && setting.consentGranted) {
                 _hasConsented.value = true
             }
         }
@@ -27,9 +26,8 @@ class ConsentViewModel(
 
     fun grantConsent(onGranted: () -> Unit) {
         viewModelScope.launch {
-            appSettingDao.insertOrUpdate(
-                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = false)
-            )
+            appSettingDao.ensureRow()
+            appSettingDao.setConsent(true)
             _hasConsented.value = true
             onGranted()
         }
