@@ -140,8 +140,8 @@ fun SearchScreen(
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = if (indexedCount > 0) "$indexedCount thẻ đã sẵn sàng để tìm"
-            else "chưa có thẻ nào — chụp màn hình bài học để bắt đầu",
+            text = if (indexedCount > 0) "$indexedCount thẻ sẵn sàng tìm theo ý nghĩa"
+            else "chưa có thẻ sẵn sàng tìm theo ý nghĩa",
             fontSize = 13.sp,
             color = RemoraSubtleText
         )
@@ -261,7 +261,8 @@ fun SearchScreen(
 
                 Text(
                     text = when {
-                        uiState.outcome.weakOnly -> "không có kết quả chắc chắn — gần nghĩa nhất:"
+                        uiState.outcome.results.all { it.matchKind == MatchKind.TIME } ->
+                            "${shown.size} kết quả · theo thời gian"
                         uiState.outcome.semanticAvailable -> "${shown.size} kết quả · khớp từ khóa và ý nghĩa"
                         else -> "${shown.size} kết quả · khớp từ khóa"
                     },
@@ -645,7 +646,6 @@ private fun matchLabel(kind: MatchKind): String = when (kind) {
     MatchKind.SEMANTIC -> "khớp ý nghĩa"
     MatchKind.BOTH -> "khớp từ khóa + ý nghĩa"
     MatchKind.TIME -> "theo thời gian"
-    MatchKind.WEAK -> "gần nghĩa"
 }
 
 private fun highlighted(text: String, terms: List<String>): AnnotatedString = buildAnnotatedString {

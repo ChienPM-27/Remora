@@ -2,14 +2,18 @@ package com.remora.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.remora.core.model.entity.MemoryCard
 import com.remora.search.SearchOutcome
 import com.remora.search.SemanticSearchEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -42,14 +46,26 @@ class SearchViewModel(
     val indexedCount: StateFlow<Int> = _indexedCount.asStateFlow()
 
     private var searchJob: Job? = null
+    private var library: List<MemoryCard>? = null
 
-    // Incremented for every new request. OkHttp calls are blocking and not cancellable, so a cancelled
-    // request can still finish later; this id lets us drop its stale result.
+    // Query edits and library changes both invalidate in-flight results, even if work returns late.
     private var requestId = 0
 
     init {
         viewModelScope.launch {
-            _indexedCount.value = runCatching { searchEngine.indexedCount() }.getOrDefault(0)
+            try {
+                searchEngine.observeLibrary().distinctUntilChanged().collect { cards ->
+                    library = cards
+                    _indexedCount.value = searchEngine.indexedCount(cards)
+                    refreshVisibleResults(cards)
+                    launchSearch(debounceMs = 0)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                Timber.e("Library refresh failed")
+                _uiState.value = SearchUiState.Error("Chưa thể cập nhật thư viện, vui lòng thử lại")
+            }
         }
     }
 
@@ -82,9 +98,9 @@ class SearchViewModel(
                 _uiState.value = SearchUiState.Loading
             }
             try {
-                val outcome = searchEngine.search(q)
+                val outcome = searchEngine.search(q, cards = library)
+                currentCoroutineContext().ensureActive()
                 if (myId != requestId) return@launch // a newer query superseded this one
-                _indexedCount.value = outcome.indexedCount
                 if (outcome.results.isEmpty()) {
                     _uiState.value = SearchUiState.Empty(outcome)
                 } else {
@@ -93,8 +109,8 @@ class SearchViewModel(
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
-                Timber.e(e, "Search failed for query: $q")
+            } catch (_: Exception) {
+                Timber.e("Search failed")
                 if (myId == requestId) {
                     _uiState.value = SearchUiState.Error("Tìm kiếm thất bại, vui lòng thử lại")
                 }
@@ -102,6 +118,24 @@ class SearchViewModel(
                 if (myId == requestId) _isSearching.value = false
             }
         }
+    }
+
+    /** Remove deleted results immediately and keep displayed notes/status current during reranking. */
+    private fun refreshVisibleResults(cards: List<MemoryCard>) {
+        val previous = when (val state = _uiState.value) {
+            is SearchUiState.Success -> state.outcome
+            is SearchUiState.Empty -> state.outcome
+            else -> return
+        }
+        val byId = cards.associateBy { it.id }
+        val outcome = previous.copy(
+            results = previous.results.mapNotNull { result ->
+                byId[result.card.id]?.let { result.copy(card = it) }
+            },
+            indexedCount = _indexedCount.value
+        )
+        _uiState.value = if (outcome.results.isEmpty()) SearchUiState.Empty(outcome)
+        else SearchUiState.Success(outcome)
     }
 
     private fun rememberQuery(q: String) {

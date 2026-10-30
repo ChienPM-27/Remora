@@ -258,5 +258,14 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
   - Dialog xác nhận `ImportCardDialog`: xem trước ảnh và cho phép người dùng nhập mục đích học tập (`user_intent`), sau đó lưu thẻ dưới dạng `PENDING` và gửi tác vụ xử lý sang WorkManager.
   - Toàn bộ 46/46 unit tests pass, `lintDebug`, `assembleDebug` thành công. Đã kiểm thử thực tế trên máy ảo: ảnh import được phân tích bởi Gemini qua Docker Gateway và chuyển trạng thái thành `DONE` trong vòng ~4.7s.
 
+---
+
+## 11. T008: Kết quả tìm kiếm đủ liên quan và thư viện cập nhật trực tiếp (2026-10-30)
+
+- Áp dụng plan của `specs/002-trustworthy-memory`: chỉ nhận kết quả semantic có cosine `>= 0.55` hoặc có bằng chứng khớp từ khóa. Bỏ fallback `0.45` từng ghi ở mục 9; không trả thẻ gần nghĩa yếu khi không có kết quả chắc chắn. Đây là ngưỡng đã chốt, chưa phải kết quả hiệu chỉnh bằng dữ liệu mới.
+- Tìm từ khóa, ghi chú và thời gian trên toàn bộ thẻ đã lưu, kể cả thẻ đang xử lý hoặc có vector hỏng. Semantic và số thẻ sẵn sàng tìm theo ý nghĩa chỉ dùng thẻ `DONE` có vector hợp lệ. Cách này giữ ghi chú tìm được khi AI chưa sẵn sàng.
+- Dùng Flow thư viện Room hiện có làm snapshot cho số thẻ và kết quả. Mỗi thay đổi dữ liệu vô hiệu hóa tìm kiếm cũ và cập nhật truy vấn hiện tại; cache vector truy vấn 24 mục vẫn được giữ trong bộ nhớ. Detail tiếp tục mở theo ID qua luồng trực tiếp của T007.
+- Diagnostic tìm kiếm chỉ ghi số lượng/trạng thái, không ghi truy vấn, cụm thời gian hoặc nội dung exception. Không đổi dependency, schema, backend hay mô hình AI.
+
 
 

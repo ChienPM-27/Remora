@@ -24,6 +24,8 @@
 ## Phase 5: US3 — Find the right memory (P1)
 **Independent validation**: offline keyword hit, empty weak-only matches, query cancellation and reactive counts.
 - [ ] T008 [US3] Enforce strong-only search and reactive library refresh in app/src/main/java/com/remora/search/SemanticSearchEngine.kt and ui/search/SearchViewModel.kt; remove query logs, keep intent/time/abbreviation behavior and live details. Add regression tests in app/src/test/java/com/remora/search/SemanticSearchEngineTest.kt and ui/search/SearchViewModelTest.kt. Covers FR-008/009/013/015.
+  - Implementation and automated verification completed on 2026-10-30: 19 search regressions and all 78 app unit tests passed; lint and debug/test APK builds passed. See docs/PROGRESS_REPORT.md.
+  - Device acceptance remains pending: ADB reports no connected devices. Keep this checkbox open until the demo search flow is verified on a physical phone or the user explicitly waives that checkpoint. T009 has not started.
 
 ## Phase 6: US4 — Reconnect with context (P1)
 **Independent validation**: two source batches remain distinct; empty result cached; independent retry does not re-extract.

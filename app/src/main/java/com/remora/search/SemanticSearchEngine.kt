@@ -3,17 +3,20 @@ package com.remora.search
 import com.remora.ai.AiGatewayClient
 import com.remora.core.model.contract.VectorMath
 import com.remora.core.model.entity.MemoryCard
+import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.dao.MemoryCardDao
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import timber.log.Timber
 
 enum class MatchKind {
     KEYWORD,   // matched words / abbreviations only
     SEMANTIC,  // matched by meaning only
     BOTH,
-    TIME,      // query was only a time phrase ("hôm qua"), card is inside the range
-    WEAK       // nothing confident; closest-by-meaning fallback
+    TIME       // query was only a time phrase ("hôm qua"), card is inside the range
 }
 
 data class SearchResultCard(
@@ -34,80 +37,76 @@ data class SearchOutcome(
     val highlightTerms: List<String> = emptyList(),
     /** False when the query could not be embedded (offline / quota / auth): results are keyword-only. */
     val semanticAvailable: Boolean = true,
-    /** True when nothing matched confidently and [results] are the closest-by-meaning fallbacks. */
-    val weakOnly: Boolean = false,
     val indexedCount: Int = 0
 )
 
 /**
  * Hybrid search: keyword/abbreviation matching on-device + embedding similarity.
  *
- * The old implementation kept only cosine >= 0.65 and returned an empty list whenever the query
- * embedding failed, so short queries such as "pttk" (4 letters vs. a long document vector) never matched.
+ * Local text remains searchable without a vector. Semantic-only results must meet the accepted
+ * relevance threshold; weak matches never substitute for an honest empty result.
  */
 class SemanticSearchEngine(
     private val dao: MemoryCardDao,
-    private val aiClient: AiGatewayClient
+    private val generateEmbedding: suspend (String) -> Result<List<Float>>
 ) {
+    constructor(dao: MemoryCardDao, aiClient: AiGatewayClient) : this(
+        dao, { text -> aiClient.generateEmbedding(text, taskType = "RETRIEVAL_QUERY") }
+    )
+
     // Small cache so refining filters / retrying does not burn the gateway's embedding quota.
     private val queryVectorCache = object : LinkedHashMap<String, FloatArray>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?): Boolean = size > 24
     }
 
-    suspend fun indexedCount(): Int = dao.getDoneCardCount()
+    fun observeLibrary(): Flow<List<MemoryCard>> = dao.getAllCardsFlow()
+        .map { entities -> entities.map { it.toDomainModel() } }
 
-    suspend fun search(rawQuery: String, now: Long = System.currentTimeMillis()): SearchOutcome {
+    fun indexedCount(cards: List<MemoryCard>): Int = cards.count {
+        it.status == ProcessingStatus.DONE && it.embedding != null
+    }
+
+    suspend fun search(
+        rawQuery: String,
+        now: Long = System.currentTimeMillis(),
+        cards: List<MemoryCard>? = null
+    ): SearchOutcome {
         val resolved = TimeResolver.resolve(rawQuery, now)
         val parsed = QueryParser.parse(resolved.cleanQuery)
-        val indexed = dao.getDoneCardCount()
-
-        val entities = if (resolved.startTimeMs != null && resolved.endTimeMs != null) {
-            dao.getDoneCardsInTimeRange(resolved.startTimeMs, resolved.endTimeMs)
-        } else {
-            dao.getAllDoneCardsWithEmbedding()
+        val library = cards ?: observeLibrary().first()
+        val indexed = indexedCount(library)
+        val candidates = library.filter { card ->
+            (resolved.startTimeMs == null || card.createdAt >= resolved.startTimeMs) &&
+                (resolved.endTimeMs == null || card.createdAt <= resolved.endTimeMs)
         }
 
         // Query was only a time phrase ("hôm qua"): list everything in that range, newest first.
         if (parsed.isBlank) {
             val results = if (resolved.startTimeMs != null) {
-                entities.take(MAX_RESULTS).map { SearchResultCard(it.toDomainModel(), 0f, MatchKind.TIME) }
+                candidates.sortedByDescending { it.createdAt }.take(MAX_RESULTS)
+                    .map { SearchResultCard(it, 0f, MatchKind.TIME) }
             } else emptyList()
             return SearchOutcome(results = results, timeLabel = resolved.label, indexedCount = indexed)
         }
 
-        Timber.i("Search '${parsed.embeddingText}' over ${entities.size} cards (time=${resolved.label})")
-
         val queryVector = embedQuery(parsed.embeddingText)
         currentCoroutineContext().ensureActive()
 
-        val scored = entities.map { entity ->
-            val card = entity.toDomainModel()
+        val scored = candidates.map { card ->
             val lex = LexicalMatcher.score(parsed, card.toSearchableDoc())
-            val sim = if (queryVector != null) {
+            val sim = if (queryVector != null && card.status == ProcessingStatus.DONE) {
                 card.embedding?.takeIf { it.size == queryVector.size }?.let { VectorMath.dotProduct(queryVector, it) }
+                    ?.takeIf { it.isFinite() }
             } else null
             Candidate(card, lex, sim)
         }
 
         val strong = scored.filter { it.lex.isMatch || (it.sim ?: 0f) >= SEMANTIC_ACCEPT }
-        val picked: List<Candidate>
-        val weakOnly: Boolean
-        if (strong.isNotEmpty()) {
-            picked = strong
-            weakOnly = false
-        } else {
-            picked = scored.filter { (it.sim ?: 0f) >= SEMANTIC_WEAK }
-                .sortedByDescending { it.sim }
-                .take(WEAK_RESULTS)
-            weakOnly = picked.isNotEmpty()
-        }
-
         Timber.i(
-            "Search done: ${strong.size} strong, ${picked.size} shown, semantic=${queryVector != null}, " +
-                "bestSim=${scored.mapNotNull { it.sim }.maxOrNull()}"
+            "Search completed: candidates=${scored.size}, matches=${strong.size}, semantic=${queryVector != null}"
         )
 
-        val results = picked
+        val results = strong
             .map { it to rank(it) }
             .sortedWith(
                 compareByDescending<Pair<Candidate, Float>> { it.second }
@@ -122,7 +121,6 @@ class SemanticSearchEngine(
             expansions = parsed.expansions,
             highlightTerms = parsed.highlightTerms,
             semanticAvailable = queryVector != null,
-            weakOnly = weakOnly,
             indexedCount = indexed
         )
     }
@@ -140,8 +138,7 @@ class SemanticSearchEngine(
         val kind = when {
             lex.isMatch && semHit -> MatchKind.BOTH
             lex.isMatch -> MatchKind.KEYWORD
-            semHit -> MatchKind.SEMANTIC
-            else -> MatchKind.WEAK
+            else -> MatchKind.SEMANTIC
         }
         val summaryShowsMatch = Snippets.highlightRanges(card.summary, parsed.highlightTerms).isNotEmpty()
         val snippet = if (lex.isMatch && !summaryShowsMatch) {
@@ -152,10 +149,10 @@ class SemanticSearchEngine(
 
     private suspend fun embedQuery(text: String): FloatArray? {
         synchronized(queryVectorCache) { queryVectorCache[text] }?.let { return it }
-        val result = aiClient.generateEmbedding(text, taskType = "RETRIEVAL_QUERY")
+        val result = generateEmbedding(text)
         val vector = result.getOrNull()?.toFloatArray()?.let { VectorMath.l2Normalize(it) }
         if (vector == null) {
-            Timber.w(result.exceptionOrNull(), "Query embedding failed; falling back to keyword-only search")
+            Timber.w("Query embedding unavailable; using local keyword search")
             return null
         }
         synchronized(queryVectorCache) { queryVectorCache[text] = vector }
@@ -172,13 +169,8 @@ class SemanticSearchEngine(
     )
 
     companion object {
-        /**
-         * Cosine thresholds for gemini-embedding-2 (768d). These are starting values, not measured ones:
-         * the previous fixed 0.65 dropped short queries. Tune using the "bestSim" Timber log line above.
-         */
+        /** Existing product threshold; lexical evidence can qualify independently of cosine. */
         const val SEMANTIC_ACCEPT = 0.55f
-        const val SEMANTIC_WEAK = 0.45f
-        const val WEAK_RESULTS = 3
         const val MAX_RESULTS = 30
     }
 }
