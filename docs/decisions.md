@@ -20,6 +20,9 @@ related_code: ["services/ai-service", "services/gateway", "core/model"]
   completed successfully in 2m 2s. This is local verification, not live-provider/device evidence.
 - Old deployment/model/demo claims below are historical records; they do not certify current
   production readiness. No infrastructure deployment is included in this work.
+- Android Service timeout override verified using the installed official Android 35 SDK
+  (`javap android.app.Service`: `onTimeout(int, int)`) and Android SDK source. Stop monitoring
+  cleanly when Android ends a dataSync foreground-service allowance; explicit import remains available.
 
 Tài liệu này ghi nhận các tham số API, kết quả đo đạc thực nghiệm (benchmark), phiên bản thư viện và các quyết định kiến trúc quan trọng trong quá trình phát triển Remora MVP theo quy ước trong [AGENTS.md](../AGENTS.md).
 

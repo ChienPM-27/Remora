@@ -18,4 +18,10 @@ interface AppSettingDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(setting: AppSettingEntity)
+
+    @Query("UPDATE app_setting SET paused = :paused WHERE id = 1")
+    suspend fun setPaused(paused: Boolean)
+
+    @Query("UPDATE app_setting SET notifications_enabled = :enabled WHERE id = 1")
+    suspend fun setNotificationsEnabled(enabled: Boolean)
 }

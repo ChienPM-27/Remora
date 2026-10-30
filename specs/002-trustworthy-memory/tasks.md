@@ -13,7 +13,7 @@
 ## Phase 3: US1 — Save and control (P1)
 **Independent validation**: duplicate offline save, restart, preferences and consent remain independent.
 - [x] T003 [US1] Implement one durable SaveCoordinator and unique WorkScheduler in app/src/main/java/com/remora/data/SaveCoordinator.kt and work/WorkScheduler.kt; route capture/import through it. Stream exact-byte SHA-256 with 20 MiB cap, retain blank intent as null, reuse duplicates without replacing notes, clean failed copies and reconcile pending jobs. Include real Room/file tests in app/src/androidTest/java/com/remora/data/SaveCoordinatorTest.kt. Covers FR-001/003/004/005, SC-003/004.
-- [ ] T004 [US1] Connect persistent consent/settings to capture lifecycle in app/src/main/java/com/remora/ui/settings/SettingsScreen.kt, ui/consent/ConsentViewModel.kt, MainActivity.kt and capture/. Provide permission recovery, optional import-first use and consumed capture intents; use lifecycle-owned ViewModels. Test settings/consent logic. Covers FR-001/002/015.
+- [x] T004 [US1] Connect persistent consent/settings to capture lifecycle in app/src/main/java/com/remora/ui/settings/SettingsScreen.kt, ui/consent/ConsentViewModel.kt, MainActivity.kt and capture/. Provide permission recovery, optional import-first use and consumed capture intents; use lifecycle-owned ViewModels. Test settings/consent logic. Covers FR-001/002/015.
 
 ## Phase 4: US2 — Understand and recover (P1)
 **Independent validation**: retry after embedding failure uses saved extraction; deleted/completed cards are not processed again.

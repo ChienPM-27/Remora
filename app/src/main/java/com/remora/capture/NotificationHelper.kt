@@ -102,7 +102,6 @@ object NotificationHelper {
             .setContentTitle("Phát hiện ảnh chụp bài giảng")
             .setContentText("Chạm để mở bảng lưu Remora hoặc nhập ghi chú")
             .setContentIntent(contentPendingIntent)
-            .setFullScreenIntent(contentPendingIntent, false)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .addAction(saveAction)

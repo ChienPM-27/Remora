@@ -37,7 +37,7 @@ class ScreenshotObserver(
             try {
                 val db = RemoraDatabase.getInstance(context)
                 val setting = db.appSettingDao().getSetting()
-                if (setting?.paused == true) {
+                if (setting?.consentGranted != true || setting.paused) {
                     Timber.d("Screenshot capture ignored: user has paused monitoring.")
                     return@launch
                 }
@@ -156,7 +156,7 @@ class ScreenshotObserver(
         val imageUri = ContentUris.withAppendedId(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id
         )
-        Timber.i("Fresh screenshot detected: id=" + id + ", uri=" + imageUri + ", name=" + displayName)
+        Timber.i("Fresh screenshot detected: id=" + id)
         CaptureEventManager.emitScreenshot(imageUri)
         onScreenshotDetected(imageUri, pathOrData)
         return true

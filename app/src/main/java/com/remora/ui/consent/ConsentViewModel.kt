@@ -4,33 +4,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.remora.data.local.dao.AppSettingDao
 import com.remora.data.local.entity.AppSettingEntity
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class ConsentViewModel(
-    private val appSettingDao: AppSettingDao
-) : ViewModel() {
-
-    private val _hasConsented = MutableStateFlow(false)
-    val hasConsented: StateFlow<Boolean> = _hasConsented.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            val setting = appSettingDao.getSetting()
-            if (setting?.consentGranted == true) {
-                _hasConsented.value = true
-            }
-        }
-    }
+class ConsentViewModel(private val appSettingDao: AppSettingDao) : ViewModel() {
+    val hasConsented: StateFlow<Boolean?> = appSettingDao.getSettingFlow()
+        .map { it?.consentGranted == true }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     fun grantConsent(onGranted: () -> Unit) {
         viewModelScope.launch {
+            val existing = appSettingDao.getSetting()
             appSettingDao.insertOrUpdate(
-                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true, consentGranted = true)
+                (existing ?: AppSettingEntity(paused = true)).copy(consentGranted = true)
             )
-            _hasConsented.value = true
             onGranted()
         }
     }

@@ -11,15 +11,28 @@ import android.os.IBinder
 import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import timber.log.Timber
+import com.remora.data.local.RemoraDatabase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 
 class CaptureForegroundService : Service() {
 
     private var observer: ScreenshotObserver? = null
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         startForegroundNotification()
+        if (!CapturePermissions.canReadImages(this)) { stopSelf(); return }
         registerScreenshotObserver()
+        serviceScope.launch {
+            RemoraDatabase.getInstance(applicationContext).appSettingDao().getSettingFlow().collect {
+                if (it?.consentGranted != true || it.paused) stopSelf()
+            }
+        }
     }
 
     private fun startForegroundNotification() {
@@ -47,8 +60,13 @@ class CaptureForegroundService : Service() {
     }
 
     private fun registerScreenshotObserver() {
-        observer = ScreenshotObserver(applicationContext) { imageUri, _ ->
-            NotificationHelper.showCapturePrompt(applicationContext, imageUri)
+        observer = ScreenshotObserver(applicationContext, serviceScope) { imageUri, _ ->
+            serviceScope.launch {
+                val setting = RemoraDatabase.getInstance(applicationContext).appSettingDao().getSetting()
+                if (setting?.consentGranted == true && !setting.paused && setting.notificationsEnabled && CapturePermissions.canNotify(applicationContext)) {
+                    NotificationHelper.showCapturePrompt(applicationContext, imageUri)
+                }
+            }
         }
         contentResolver.registerContentObserver(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
@@ -60,6 +78,7 @@ class CaptureForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        serviceScope.cancel()
         observer?.let {
             contentResolver.unregisterContentObserver(it)
         }
@@ -68,14 +87,13 @@ class CaptureForegroundService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTimeout(startId: Int, fgsType: Int) { stopSelf() }
+
     companion object {
         fun start(context: Context) {
             val intent = Intent(context, CaptureForegroundService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            try { context.startForegroundService(intent) }
+            catch (_: RuntimeException) { Timber.w("Capture service could not start; library import remains available") }
         }
 
         fun stop(context: Context) {

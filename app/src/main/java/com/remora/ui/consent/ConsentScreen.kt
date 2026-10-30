@@ -61,7 +61,7 @@ fun ConsentScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Cam kết bảo vệ dữ liệu sinh viên:",
+                    text = "Bạn chọn điều Remora được ghi nhớ:",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
@@ -69,7 +69,9 @@ fun ConsentScreen(
                 Text(
                     text = "• Ảnh chụp chỉ rời khỏi máy sau khi bạn bấm nút LƯU.\n" +
                             "• Nếu bạn bấm Bỏ qua hoặc đóng thông báo, không có bất kỳ dữ liệu nào được gửi đi.\n" +
-                            "• Máy chủ xử lý AI tạm thời (stateless) và TUYỆT ĐỐI KHÔNG lưu ảnh hay văn bản của bạn trên đám mây trong suốt quá trình demo.",
+                            "• Khi Lưu, ảnh và ghi chú được gửi qua Remora tới Google Gemini để đọc và tóm tắt. Tìm kiếm và gợi nhớ gửi nội dung văn bản cần thiết.\n" +
+                            "• Remora lưu thư viện trên máy và không lưu ảnh hay OCR trên máy chủ. Cách Google xử lý dữ liệu phụ thuộc gói dịch vụ của đơn vị vận hành.\n" +
+                            "• Bạn có thể chọn từng ảnh ngay; theo dõi ảnh chụp là tùy chọn trong Cài đặt.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
