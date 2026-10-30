@@ -18,7 +18,7 @@
 ## Phase 4: US2 — Understand and recover (P1)
 **Independent validation**: retry after embedding failure uses saved extraction; deleted/completed cards are not processed again.
 - [x] T005 [US2] Add runtime token-only AI session and login settings in app/src/main/java/com/remora/ai/AiGatewayClient.kt, ai/AiSessionStore.kt, ui/settings/SettingsScreen.kt and app/build.gradle.kts; remove APK demo passwords, sanitize errors and validate 768 finite nonzero vector elements. Add API/logic tests under app/src/test/java/com/remora/ai/. Covers FR-007/013/014.
-- [ ] T006 [US2] Checkpoint extraction and bounded attempts in app/src/main/java/com/remora/work/CardAnalyzeWorker.kt; propagate cancellation, avoid missing/completed-card work and schedule separate resurfacing. Add checkpoint/error tests in app/src/test/java/com/remora/work/. Covers FR-004/005/007, SC-003/004.
+- [x] T006 [US2] Checkpoint extraction and bounded attempts in app/src/main/java/com/remora/work/CardAnalyzeWorker.kt; propagate cancellation, avoid missing/completed-card work and schedule separate resurfacing. Add checkpoint/error tests in app/src/test/java/com/remora/work/. Covers FR-004/005/007, SC-003/004.
 - [ ] T007 [US2] Wire live detail retry and confirmed deletion/clear in app/src/main/java/com/remora/ui/gallery/CardDetailScreen.kt, ui/gallery/GalleryViewModel.kt, ui/RemoraMainScreen.kt and ui/timeline/TimelineScreen.kt. Cancel card jobs, remove links and only owned files; add cancellation/deletion integration coverage in app/src/androidTest/java/com/remora/data/SaveCoordinatorTest.kt. Covers FR-006/009/015, SC-006.
 
 ## Phase 5: US3 — Find the right memory (P1)

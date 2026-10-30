@@ -54,6 +54,12 @@ class SaveCoordinator(
 
     suspend fun reconcilePending() = withContext(Dispatchers.IO) {
         database.memoryCardDao().getPendingCards().forEach { scheduler.analyze(it.id) }
+        database.memoryCardDao().getPendingResurfacing().forEach { scheduler.resurface(it.id) }
+    }
+
+    suspend fun resumeAfterSignIn() {
+        database.memoryCardDao().resetAuthenticationFailures()
+        reconcilePending()
     }
 
     suspend fun retry(cardId: Long) = mutationLock.withLock {

@@ -54,7 +54,7 @@ fun SettingsScreen(onClearAllCards: () -> Unit, modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Cài đặt", style = MaterialTheme.typography.headlineMedium)
         Text("Bạn quyết định điều Remora được ghi nhớ.", style = MaterialTheme.typography.bodyMedium)
-        AiConnectionCard(container.aiGatewayClient) { container.saveCoordinator.reconcilePending() }
+        AiConnectionCard(container.aiGatewayClient) { container.saveCoordinator.resumeAfterSignIn() }
         val value = settings
         if (value == null) {
             CircularProgressIndicator()

@@ -60,6 +60,8 @@ class GalleryViewModelTest {
     private val fakeCardDao = object : MemoryCardDao {
         override suspend fun getCardByHash(hash: String): MemoryCardEntity? = null
         override suspend fun getPendingCards(): List<MemoryCardEntity> = emptyList()
+        override suspend fun getPendingResurfacing(): List<MemoryCardEntity> = emptyList()
+        override suspend fun resetAuthenticationFailures() = Unit
         override suspend fun insertCard(card: MemoryCardEntity): Long = 1L
         override suspend fun updateCard(card: MemoryCardEntity) {}
         override suspend fun deleteCard(id: Long) {}

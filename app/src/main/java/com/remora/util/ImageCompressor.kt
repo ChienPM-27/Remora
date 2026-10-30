@@ -39,7 +39,7 @@ object ImageCompressor {
         maxDimension: Int = MAX_DIMENSION,
         quality: Int = DEFAULT_QUALITY
     ): ByteArray? {
-        val originalBytes = inputStream.readBytes()
+        val originalBytes = inputStream.readBytesBounded() ?: return null
         if (originalBytes.isEmpty()) return null
 
         // Decode bounds first to check dimensions
@@ -77,6 +77,19 @@ object ImageCompressor {
 
         val outputStream = ByteArrayOutputStream()
         finalBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+        if (finalBitmap !== decodedBitmap) finalBitmap.recycle()
+        decodedBitmap.recycle()
         return outputStream.toByteArray()
+    }
+
+    private fun InputStream.readBytesBounded(): ByteArray? {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val count = read(buffer)
+            if (count < 0) return output.toByteArray()
+            if (output.size() + count > ImageImporter.MAX_BYTES) return null
+            output.write(buffer, 0, count)
+        }
     }
 }

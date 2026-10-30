@@ -20,6 +20,7 @@ class SaveCoordinatorTest {
         val enqueued = mutableListOf<Long>()
         val cancelled = mutableListOf<Long>()
         override fun analyze(cardId: Long) { enqueued += cardId }
+        override fun resurface(cardId: Long) = Unit
         override fun cancel(cardId: Long) { cancelled += cardId }
         override fun cancelAll() = Unit
     }

@@ -48,11 +48,6 @@ class Stage2BatchEvaluator(
         )
 
         val responseResult = client.evaluateResurfacing(request)
-        if (responseResult.isFailure) {
-            Timber.w("Resurfacing batch request failed")
-            return emptyList()
-        }
-
         val batchResponse = responseResult.getOrThrow()
         val rawItems = mutableListOf<ResurfacedItem>()
 

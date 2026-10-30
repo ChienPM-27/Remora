@@ -49,4 +49,10 @@ interface MemoryCardDao {
 
     @Query("SELECT * FROM memory_card WHERE status = 'PENDING'")
     suspend fun getPendingCards(): List<MemoryCardEntity>
+
+    @Query("SELECT * FROM memory_card WHERE status = 'DONE' AND resurfacing_status = 'PENDING'")
+    suspend fun getPendingResurfacing(): List<MemoryCardEntity>
+
+    @Query("UPDATE memory_card SET status = 'PENDING', attempt_count = 0, error_code = NULL WHERE status = 'FAILED' AND error_code = 'SIGN_IN_REQUIRED'")
+    suspend fun resetAuthenticationFailures()
 }

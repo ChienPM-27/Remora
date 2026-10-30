@@ -12,6 +12,7 @@ import java.util.concurrent.TimeUnit
 
 interface CardWorkScheduler {
     fun analyze(cardId: Long)
+    fun resurface(cardId: Long)
     fun cancel(cardId: Long)
     fun cancelAll()
 }
@@ -31,6 +32,15 @@ class WorkScheduler(context: Context) : CardWorkScheduler {
     }
 
     override fun cancel(cardId: Long) { workManager.cancelAllWorkByTag(cardTag(cardId)) }
+
+    override fun resurface(cardId: Long) {
+        val request = OneTimeWorkRequestBuilder<ResurfaceWorker>()
+            .setInputData(workDataOf(CardAnalyzeWorker.KEY_CARD_ID to cardId))
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .addTag(TAG).addTag(cardTag(cardId)).build()
+        workManager.enqueueUniqueWork("resurface-$cardId", ExistingWorkPolicy.KEEP, request)
+    }
     override fun cancelAll() { workManager.cancelAllWorkByTag(TAG) }
 
     companion object {
