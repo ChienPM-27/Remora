@@ -2,6 +2,8 @@ package com.remora.di
 
 import android.content.Context
 import com.remora.ai.AiGatewayClient
+import com.remora.ai.AiSessionStore
+import com.remora.BuildConfig
 import com.remora.data.SaveCoordinator
 import com.remora.work.WorkScheduler
 import com.remora.core.model.contract.MemoryCardRepository
@@ -34,7 +36,7 @@ class DefaultAppContainer(private val context: Context) : AppContainer {
     }
 
     override val aiGatewayClient: AiGatewayClient by lazy {
-        AiGatewayClient()
+        AiGatewayClient(sessionStore = AiSessionStore(context, BuildConfig.PROXY_BASE_URL))
     }
 
     override val resurfacingManager: ResurfacingManager by lazy {

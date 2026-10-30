@@ -1,192 +1,85 @@
 package com.remora.ai
 
 import kotlinx.coroutines.test.runTest
-import okhttp3.Interceptor
+import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Protocol
-import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
+import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 
 class AiGatewayClientTest {
+    private fun response(request: Request, code: Int, body: String) = Response.Builder()
+        .request(request).protocol(Protocol.HTTP_1_1).code(code).message("Test")
+        .body(body.toResponseBody("application/json".toMediaType())).build()
 
     @Test
-    fun testAutoReloginOn401Unauthorized() = runTest {
-        val loginCount = AtomicInteger(0)
-        val embeddingCount = AtomicInteger(0)
-
-        val interceptor = Interceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-
-            when {
-                url.contains("/auth/login-demo") -> {
-                    val count = loginCount.incrementAndGet()
-                    val token = if (count == 1) "expired_token_1" else "valid_token_2"
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
-                        .body("""{"access_token":"$token","token_type":"Bearer","expires_in":3600}""".toResponseBody("application/json".toMediaType()))
-                        .build()
-                }
-                url.contains("/ai/embeddings") -> {
-                    val count = embeddingCount.incrementAndGet()
-                    val authHeader = request.header("Authorization")
-                    if (count == 1) {
-                        assertEquals("Bearer expired_token_1", authHeader)
-                        Response.Builder()
-                            .request(request)
-                            .protocol(Protocol.HTTP_1_1)
-                            .code(401)
-                            .message("Unauthorized")
-                            .body("""{"error":"token_expired"}""".toResponseBody("application/json".toMediaType()))
-                            .build()
-                    } else {
-                        assertEquals("Bearer valid_token_2", authHeader)
-                        Response.Builder()
-                            .request(request)
-                            .protocol(Protocol.HTTP_1_1)
-                            .code(200)
-                            .message("OK")
-                            .body("""{"embedding":[0.1, 0.2, 0.3],"dimension":3}""".toResponseBody("application/json".toMediaType()))
-                            .build()
-                    }
-                }
-                else -> {
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(404)
-                        .message("Not Found")
-                        .body("".toResponseBody(null))
-                        .build()
-                }
-            }
-        }
-
-        val testHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient)
-
-        val result = client.generateEmbedding("test text", "RETRIEVAL_QUERY")
-        assertTrue("Request should succeed after auto-relogin retry", result.isSuccess)
-        assertEquals(3, result.getOrNull()?.size)
-        assertEquals(2, loginCount.get()) // 1 initial + 1 refresh
-        assertEquals(2, embeddingCount.get()) // 1 401 failure + 1 retry
+    fun noSessionNeverSendsAnImage() = runTest {
+        val requests = AtomicInteger()
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            requests.incrementAndGet(); response(chain.request(), 500, "private provider detail")
+        }.build()
+        val client = AiGatewayClient("http://localhost/v1", http)
+        val result = client.extractCard(byteArrayOf(1), "private note")
+        assertEquals(401, (result.exceptionOrNull() as ApiException).statusCode)
+        assertEquals(0, requests.get())
     }
 
     @Test
-    fun testReusesCachedTokenWithoutReauthenticating() = runTest {
-        val loginCount = AtomicInteger(0)
-        val embeddingCount = AtomicInteger(0)
-
-        val interceptor = Interceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
-
-            when {
-                url.contains("/auth/login-demo") -> {
-                    loginCount.incrementAndGet()
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
-                        .body("""{"access_token":"cached_token_abc","token_type":"Bearer","expires_in":3600}""".toResponseBody("application/json".toMediaType()))
-                        .build()
-                }
-                url.contains("/ai/embeddings") -> {
-                    embeddingCount.incrementAndGet()
-                    assertEquals("Bearer cached_token_abc", request.header("Authorization"))
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
-                        .body("""{"embedding":[0.5, 0.5],"dimension":2}""".toResponseBody("application/json".toMediaType()))
-                        .build()
-                }
-                else -> {
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(404)
-                        .message("Not Found")
-                        .body("".toResponseBody(null))
-                        .build()
-                }
+    fun unauthorizedClearsSessionWithoutPersistedPasswordOrAutomaticLogin() = runTest {
+        val logins = AtomicInteger()
+        val uploads = AtomicInteger()
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            if (chain.request().url.encodedPath.contains("login")) {
+                logins.incrementAndGet()
+                response(chain.request(), 200, """{"access_token":"test-token","expires_in":3600}""")
+            } else {
+                uploads.incrementAndGet()
+                response(chain.request(), 401, "private provider detail")
             }
-        }
-
-        val testHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient)
-
-        val result1 = client.generateEmbedding("first query")
-        val result2 = client.generateEmbedding("second query")
-
-        assertTrue(result1.isSuccess)
-        assertTrue(result2.isSuccess)
-        assertEquals("Login should only be called once", 1, loginCount.get())
-        assertEquals("Two embedding requests executed", 2, embeddingCount.get())
+        }.build()
+        val client = AiGatewayClient("http://localhost/v1", http)
+        assertTrue(client.signIn("http://localhost/v1", "test-user", "test-password").isSuccess)
+        val error = client.extractCard(byteArrayOf(1), null).exceptionOrNull()
+        assertEquals("HTTP_401", error?.message)
+        assertNull(client.getValidToken())
+        client.extractCard(byteArrayOf(2), null)
+        assertEquals(1, logins.get())
+        assertEquals(1, uploads.get())
     }
 
     @Test
-    fun testFailsWhenLoginFailsWithoutSendingAiRequest() = runTest {
-        val loginCount = AtomicInteger(0)
-        val embeddingCount = AtomicInteger(0)
+    fun embeddingsRequireTheContractDimensionAndAreNormalized() = runTest {
+        var size = 768
+        val store = MemorySessionStore(AiSession("http://localhost/v1", "test-token", Long.MAX_VALUE))
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            response(chain.request(), 200, """{"embedding":[${List(size) { "1.0" }.joinToString(",")}],"dimension":$size}""")
+        }.build()
+        val client = AiGatewayClient("http://localhost/v1", http, store)
+        val vector = client.generateEmbedding("test").getOrThrow()
+        assertEquals(768, vector.size)
+        assertEquals(1.0, vector.sumOf { it.toDouble() * it }, 0.0001)
+        size = 3
+        assertTrue(client.generateEmbedding("test").isFailure)
+        assertTrue(client.session.value.isValid())
+    }
 
-        val interceptor = Interceptor { chain ->
-            val request = chain.request()
-            val url = request.url.toString()
+    @Test
+    fun externalPlaintextAndEmbeddedCredentialsAreRejected() {
+        listOf("http://example.com/v1", "https://user:pass@example.com/v1", "https://example.com/v1?key=value")
+            .forEach { assertTrue(runCatching { AiGatewayClient.validateEndpoint(it) }.isFailure) }
+        assertEquals("https://example.com/v1", AiGatewayClient.validateEndpoint("https://example.com"))
+    }
 
-            when {
-                url.contains("/auth/login-demo") -> {
-                    loginCount.incrementAndGet()
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(401)
-                        .message("Invalid credentials")
-                        .body("""{"error":"invalid_credentials"}""".toResponseBody("application/json".toMediaType()))
-                        .build()
-                }
-                url.contains("/ai/embeddings") -> {
-                    embeddingCount.incrementAndGet()
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
-                        .body("{}".toResponseBody(null))
-                        .build()
-                }
-                else -> {
-                    Response.Builder()
-                        .request(request)
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(404)
-                        .message("Not Found")
-                        .body("".toResponseBody(null))
-                        .build()
-                }
-            }
-        }
-
-        val testHttpClient = OkHttpClient.Builder().addInterceptor(interceptor).build()
-        val client = AiGatewayClient(baseUrl = "http://localhost:8080/v1", client = testHttpClient)
-
-        val result = client.generateEmbedding("test text")
-        assertTrue("Call must fail", result.isFailure)
-        val exception = result.exceptionOrNull() as? ApiException
-        assertNotNull(exception)
-        assertEquals(401, exception?.statusCode)
-        assertEquals("Login called once", 1, loginCount.get())
-        assertEquals("Ai request must NOT be sent when auth token is missing", 0, embeddingCount.get())
+    @Test
+    fun invalidCardFieldsKeepValidText() {
+        val card = CardResponseParser.parse("""{"title":"Retained","summary":"Summary","tags":{"subject":null,"topics":["Math",{},2]},"content_type":"INVALID","ocr_text":"Original"}""")
+        assertEquals("Retained", card.title)
+        assertEquals("Summary", card.summary)
+        assertEquals("chưa phân loại", card.tags.subject)
+        assertEquals(listOf("Math"), card.tags.topics)
+        assertEquals("UNKNOWN", card.content_type)
+        assertEquals("Original", card.ocr_text)
+        assertTrue(runCatching { CardResponseParser.parse("{") }.isFailure)
     }
 }
