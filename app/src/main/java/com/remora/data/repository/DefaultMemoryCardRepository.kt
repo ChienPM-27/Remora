@@ -27,7 +27,13 @@ class DefaultMemoryCardRepository(
     }
 
     override suspend fun updateCard(card: MemoryCard) {
-        val entity = MemoryCardEntity.fromDomainModel(card)
+        val previous = dao.getCardById(card.id) ?: return
+        val entity = MemoryCardEntity.fromDomainModel(card).copy(
+            imageHash = previous.imageHash,
+            extractionComplete = previous.extractionComplete,
+            resurfacingStatus = previous.resurfacingStatus,
+            resurfacingAttemptCount = previous.resurfacingAttemptCount
+        )
         dao.updateCard(entity)
     }
 

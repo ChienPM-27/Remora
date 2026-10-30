@@ -7,6 +7,8 @@ import com.remora.core.model.entity.ProcessingStatus
 import com.remora.data.local.entity.MemoryCardEntity
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import com.remora.core.model.contract.VectorMath
 import org.junit.Test
 
 class MemoryCardEntityTest {
@@ -23,7 +25,7 @@ class MemoryCardEntityTest {
             tags = CardTags(subject = "Giải Tích", topics = listOf("ĐạoHàm", "Toán")),
             contentType = ContentType.THEORY,
             ocrText = "df/dx = lim (f(x+h, y) - f(x, y)) / h",
-            embedding = floatArrayOf(0.12f, -0.34f, 0.56f, 0.78f),
+            embedding = FloatArray(768) { if (it == 0) 1f else 0f },
             status = ProcessingStatus.DONE,
             attemptCount = 1,
             errorCode = null
@@ -49,5 +51,18 @@ class MemoryCardEntityTest {
         assertEquals(originalCard.status, restoredCard.status)
         assertEquals(originalCard.attemptCount, restoredCard.attemptCount)
         assertArrayEquals(originalCard.embedding, restoredCard.embedding, 1e-5f)
+    }
+
+    @Test
+    fun corruptVectorsDoNotDiscardReadableContent() {
+        val entity = MemoryCardEntity(imageUri = "file://test", createdAt = 1, title = "Retained")
+        listOf(ByteArray(3), ByteArray(16), ByteArray(3072),
+            VectorMath.toByteArray(FloatArray(768) { Float.NaN }),
+            VectorMath.toByteArray(FloatArray(768) { Float.POSITIVE_INFINITY }))
+            .forEach { bytes ->
+                val card = entity.copy(embedding = bytes).toDomainModel()
+                assertNull(card.embedding)
+                assertEquals("Retained", card.title)
+            }
     }
 }

@@ -8,6 +8,7 @@ import com.remora.core.model.entity.CardTags
 import com.remora.core.model.entity.ContentType
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
+import com.remora.core.model.contract.VectorMath
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -15,7 +16,8 @@ import kotlinx.serialization.json.Json
     tableName = "memory_card",
     indices = [
         Index(value = ["created_at"]),
-        Index(value = ["status"])
+        Index(value = ["status"]),
+        Index(value = ["image_hash"], unique = true)
     ]
 )
 data class MemoryCardEntity(
@@ -57,7 +59,19 @@ data class MemoryCardEntity(
     val attemptCount: Int = 0,
 
     @ColumnInfo(name = "error_code")
-    val errorCode: String? = null
+    val errorCode: String? = null,
+
+    @ColumnInfo(name = "image_hash")
+    val imageHash: String? = null,
+
+    @ColumnInfo(name = "extraction_complete", defaultValue = "0")
+    val extractionComplete: Boolean = false,
+
+    @ColumnInfo(name = "resurfacing_status", defaultValue = "'PENDING'")
+    val resurfacingStatus: String = "PENDING",
+
+    @ColumnInfo(name = "resurfacing_attempt_count", defaultValue = "0")
+    val resurfacingAttemptCount: Int = 0
 ) {
     fun toDomainModel(): MemoryCard {
         val parsedTags = try {
@@ -66,14 +80,7 @@ data class MemoryCardEntity(
             CardTags()
         }
 
-        val floatEmbedding = embedding?.let { bytes ->
-            val floats = FloatArray(bytes.size / 4)
-            val buffer = java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-            for (i in floats.indices) {
-                floats[i] = buffer.float
-            }
-            floats
-        }
+        val floatEmbedding = StoredEmbedding.decode(embedding)
 
         return MemoryCard(
             id = id,
@@ -95,13 +102,7 @@ data class MemoryCardEntity(
     companion object {
         fun fromDomainModel(card: MemoryCard): MemoryCardEntity {
             val tagsJson = Json.encodeToString(card.tags)
-            val byteEmbedding = card.embedding?.let { floats ->
-                val buffer = java.nio.ByteBuffer.allocate(floats.size * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN)
-                for (f in floats) {
-                    buffer.putFloat(f)
-                }
-                buffer.array()
-            }
+            val byteEmbedding = StoredEmbedding.encode(card.embedding)
 
             return MemoryCardEntity(
                 id = card.id,
@@ -120,4 +121,19 @@ data class MemoryCardEntity(
             )
         }
     }
+}
+
+/** Invalid vectors must not make a saved card unreadable. */
+object StoredEmbedding {
+    const val DIMENSION = 768
+
+    fun isValid(vector: FloatArray): Boolean = vector.size == DIMENSION &&
+        vector.all { it.isFinite() } && vector.any { it != 0f }
+
+    fun decode(bytes: ByteArray?): FloatArray? {
+        if (bytes == null || bytes.size != DIMENSION * 4) return null
+        return VectorMath.toFloatArray(bytes).takeIf(::isValid)
+    }
+
+    fun encode(vector: FloatArray?): ByteArray? = vector?.takeIf(::isValid)?.let(VectorMath::toByteArray)
 }

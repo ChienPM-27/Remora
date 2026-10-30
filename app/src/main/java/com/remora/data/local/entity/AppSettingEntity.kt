@@ -17,5 +17,8 @@ data class AppSettingEntity(
     val paused: Boolean = false,
 
     @ColumnInfo(name = "pause_until")
-    val pauseUntil: Long = 0L
+    val pauseUntil: Long = 0L,
+
+    @ColumnInfo(name = "consent_granted", defaultValue = "0")
+    val consentGranted: Boolean = false
 )
