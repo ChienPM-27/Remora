@@ -19,7 +19,7 @@ class ConsentViewModel(
     init {
         viewModelScope.launch {
             val setting = appSettingDao.getSetting()
-            if (setting != null && setting.notificationsEnabled) {
+            if (setting?.consentGranted == true) {
                 _hasConsented.value = true
             }
         }
@@ -28,7 +28,7 @@ class ConsentViewModel(
     fun grantConsent(onGranted: () -> Unit) {
         viewModelScope.launch {
             appSettingDao.insertOrUpdate(
-                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = false)
+                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true, consentGranted = true)
             )
             _hasConsented.value = true
             onGranted()

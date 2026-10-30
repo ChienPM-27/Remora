@@ -2,6 +2,8 @@ package com.remora.di
 
 import android.content.Context
 import com.remora.ai.AiGatewayClient
+import com.remora.data.SaveCoordinator
+import com.remora.work.WorkScheduler
 import com.remora.core.model.contract.MemoryCardRepository
 import com.remora.data.local.RemoraDatabase
 import com.remora.data.repository.DefaultMemoryCardRepository
@@ -14,9 +16,14 @@ interface AppContainer {
     val cardRepository: MemoryCardRepository
     val aiGatewayClient: AiGatewayClient
     val resurfacingManager: ResurfacingManager
+    val saveCoordinator: SaveCoordinator
 }
 
 class DefaultAppContainer(private val context: Context) : AppContainer {
+
+    override val saveCoordinator: SaveCoordinator by lazy {
+        SaveCoordinator(context, database, WorkScheduler(context))
+    }
 
     override val database: RemoraDatabase by lazy {
         RemoraDatabase.getInstance(context)

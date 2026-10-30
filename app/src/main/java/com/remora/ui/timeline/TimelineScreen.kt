@@ -86,7 +86,7 @@ fun TimelineScreen(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         if (uri != null) {
-            pendingImportUri = uri
+            onImportImage(uri, null)
         }
     }
 

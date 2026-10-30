@@ -17,7 +17,7 @@ interface MemoryCardDao {
     @Query("SELECT * FROM memory_card WHERE id = :id LIMIT 1")
     suspend fun getCardById(id: Long): MemoryCardEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCard(card: MemoryCardEntity): Long
 
     @Update
@@ -43,4 +43,10 @@ interface MemoryCardDao {
 
     @Query("DELETE FROM memory_card")
     suspend fun deleteAllCards()
+
+    @Query("SELECT * FROM memory_card WHERE image_hash = :hash LIMIT 1")
+    suspend fun getCardByHash(hash: String): MemoryCardEntity?
+
+    @Query("SELECT * FROM memory_card WHERE status = 'PENDING'")
+    suspend fun getPendingCards(): List<MemoryCardEntity>
 }

@@ -1,37 +1,61 @@
 package com.remora.util
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
-import timber.log.Timber
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.File
+import java.io.IOException
+import java.security.MessageDigest
 import java.util.UUID
 
+data class ImportedImage(val uri: String, val hash: String)
+
 object ImageImporter {
+    const val MAX_BYTES = 20 * 1024 * 1024
 
-    /**
-     * Copies an image from an external or temporary content URI (e.g. from PhotoPicker / Gallery)
-     * into the app's persistent internal storage so it can be accessed reliably at any time
-     * without permission expiration.
-     *
-     * @return Persistent "file://" URI string.
-     */
-    fun copyUriToInternalStorage(context: Context, sourceUri: Uri): String {
-        val imagesDir = File(context.filesDir, "imported_images").apply {
-            if (!exists()) mkdirs()
+    suspend fun importImage(context: Context, source: Uri): ImportedImage {
+        val directory = File(context.filesDir, "imported_images").apply {
+            if (!exists() && !mkdirs()) throw IOException("STORAGE_UNAVAILABLE")
         }
-        val filename = "import_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(8)}.jpg"
-        val destFile = File(imagesDir, filename)
-
-        val inputStream = context.contentResolver.openInputStream(sourceUri)
-            ?: throw IllegalStateException("Cannot open input stream for URI: $sourceUri")
-
-        inputStream.use { input ->
-            destFile.outputStream().use { output ->
-                input.copyTo(output)
+        val destination = File(directory, "memory-${UUID.randomUUID()}.img")
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            val input = context.contentResolver.openInputStream(source) ?: throw IOException("UNREADABLE_IMAGE")
+            var total = 0L
+            input.use { stream ->
+                destination.outputStream().use { output ->
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        val count = stream.read(buffer)
+                        if (count < 0) break
+                        total += count
+                        if (total > MAX_BYTES) throw IOException("IMAGE_TOO_LARGE")
+                        digest.update(buffer, 0, count)
+                        output.write(buffer, 0, count)
+                    }
+                    output.fd.sync()
+                }
             }
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeFile(destination.absolutePath, bounds)
+            if (total == 0L || bounds.outWidth <= 0 || bounds.outHeight <= 0) throw IOException("UNREADABLE_IMAGE")
+            val hash = digest.digest().joinToString("") { "%02x".format(it) }
+            return ImportedImage(Uri.fromFile(destination).toString(), hash)
+        } catch (error: Throwable) {
+            destination.delete()
+            throw error
         }
+    }
 
-        Timber.i("Persisted gallery image to ${destFile.absolutePath} (${destFile.length()} bytes)")
-        return Uri.fromFile(destFile).toString()
+    fun deleteOwnedImage(context: Context, uriString: String) {
+        val uri = Uri.parse(uriString)
+        if (uri.scheme != "file") return
+        val path = uri.path ?: return
+        val directory = File(context.filesDir, "imported_images").canonicalFile
+        val file = File(path).canonicalFile
+        if (file.parentFile == directory && file.isFile) file.delete()
     }
 }

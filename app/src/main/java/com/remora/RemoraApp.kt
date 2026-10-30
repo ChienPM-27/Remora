@@ -4,6 +4,10 @@ import android.app.Application
 import com.remora.di.AppContainer
 import com.remora.di.DefaultAppContainer
 import timber.log.Timber
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class RemoraApp : Application() {
 
@@ -20,6 +24,10 @@ class RemoraApp : Application() {
             })
         }
         container = DefaultAppContainer(applicationContext)
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try { container.saveCoordinator.reconcilePending() }
+            catch (_: Exception) { Timber.w("Pending work reconciliation deferred") }
+        }
         Timber.i("Remora application and AppContainer initialized")
     }
 }

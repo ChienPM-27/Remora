@@ -3,12 +3,9 @@ package com.remora.capture
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.core.app.RemoteInput
-import com.remora.core.model.entity.MemoryCard
-import com.remora.core.model.entity.ProcessingStatus
-import com.remora.data.local.RemoraDatabase
-import com.remora.data.local.entity.AppSettingEntity
-import com.remora.data.local.entity.MemoryCardEntity
+import com.remora.RemoraApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,70 +13,37 @@ import kotlinx.coroutines.withTimeout
 import timber.log.Timber
 
 class CaptureActionReceiver : BroadcastReceiver() {
-
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
-        Timber.i("CaptureActionReceiver received action: $action")
-
-        NotificationHelper.dismissNotification(context)
-
-        // Hold process execution with goAsync() during asynchronous background database insertion
-        val pendingResult = goAsync()
-
+        val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 withTimeout(8_000L) {
+                    val container = (context.applicationContext as RemoraApp).container
                     when (action) {
                         NotificationHelper.ACTION_SAVE -> {
-                            val imageUriStr = intent.getStringExtra(NotificationHelper.EXTRA_IMAGE_URI)
-                            if (imageUriStr != null) {
-                                val remoteInputResults = RemoteInput.getResultsFromIntent(intent)
-                                val userIntent = remoteInputResults?.getCharSequence(NotificationHelper.EXTRA_USER_INTENT)?.toString()
-
-                                val db = RemoraDatabase.getInstance(context)
-                                val card = MemoryCard(
-                                    imageUri = imageUriStr,
-                                    createdAt = System.currentTimeMillis(),
-                                    userIntent = userIntent,
-                                    title = "Đang xử lý...",
-                                    status = ProcessingStatus.PENDING
-                                )
-                                val newId = db.memoryCardDao().insertCard(MemoryCardEntity.fromDomainModel(card))
-                                Timber.i("Inserted PENDING memory card #$newId into Room SQLite")
-
-                                // Enqueue background analysis worker
-                                val workRequest = androidx.work.OneTimeWorkRequestBuilder<com.remora.work.CardAnalyzeWorker>()
-                                    .setConstraints(
-                                        androidx.work.Constraints.Builder()
-                                            .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED)
-                                            .build()
-                                    )
-                                    .setInputData(
-                                        androidx.work.workDataOf(com.remora.work.CardAnalyzeWorker.KEY_CARD_ID to newId)
-                                    )
-                                    .build()
-
-                                androidx.work.WorkManager.getInstance(context).enqueue(workRequest)
+                            val image = intent.getStringExtra(NotificationHelper.EXTRA_IMAGE_URI)
+                            if (image != null) {
+                                val note = RemoteInput.getResultsFromIntent(intent)
+                                    ?.getCharSequence(NotificationHelper.EXTRA_USER_INTENT)?.toString()
+                                container.saveCoordinator.save(Uri.parse(image), note)
+                                NotificationHelper.dismissNotification(context)
                             }
                         }
-
-                        NotificationHelper.ACTION_SKIP -> {
-                            Timber.i("User skipped screenshot saving. Zero data leaves device.")
-                        }
-
+                        NotificationHelper.ACTION_SKIP -> NotificationHelper.dismissNotification(context)
                         NotificationHelper.ACTION_PAUSE -> {
-                            val db = RemoraDatabase.getInstance(context)
-                            db.appSettingDao().insertOrUpdate(
-                                AppSettingEntity(id = 1L, notificationsEnabled = true, paused = true)
-                            )
-                            Timber.i("Screenshot monitoring paused by user.")
+                            val dao = container.database.appSettingDao()
+                            dao.getSetting()?.let { dao.insertOrUpdate(it.copy(paused = true)) }
+                            CaptureForegroundService.stop(context)
+                            NotificationHelper.dismissNotification(context)
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Timber.e(e, "Error or timeout in CaptureActionReceiver")
+            } catch (_: Exception) {
+                // Retain the prompt so the user can retry by opening the app.
+                Timber.w("Capture action could not complete")
             } finally {
-                pendingResult.finish()
+                pending.finish()
             }
         }
     }

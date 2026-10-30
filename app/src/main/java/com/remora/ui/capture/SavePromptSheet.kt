@@ -60,13 +60,15 @@ fun SavePromptSheet(
     onDismiss: () -> Unit,
     onToggleNotifications: () -> Unit,
     onPauseMonitoring: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isSaving: Boolean = false,
+    errorMessage: String? = null
 ) {
-    var userIntentText by remember { mutableStateOf("ôn thi giữa kỳ") }
+    var userIntentText by androidx.compose.runtime.saveable.rememberSaveable(imageUri.toString()) { mutableStateOf("") }
     val suggestionChips = listOf("ôn thi", "làm bài", "tham khảo")
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSaving) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
@@ -132,7 +134,7 @@ fun SavePromptSheet(
                         Spacer(modifier = Modifier.height(4.dp))
 
                         Text(
-                            text = "ghi lại một dòng, AI sẽ nhớ giúp bạn.",
+                            text = "Ghi chú không bắt buộc. Chỉ khi bấm Lưu, ảnh và ghi chú được gửi qua máy chủ Remora tới Google Gemini để phân tích.",
                             fontSize = 13.sp,
                             color = RemoraSubtleText
                         )
@@ -142,7 +144,8 @@ fun SavePromptSheet(
                         // Custom Styled Underline Input Field
                         BasicTextField(
                             value = userIntentText,
-                            onValueChange = { userIntentText = it },
+                            onValueChange = { userIntentText = it.take(2000) },
+                            enabled = !isSaving,
                             textStyle = TextStyle(
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.SemiBold,
@@ -151,7 +154,7 @@ fun SavePromptSheet(
                             cursorBrush = SolidColor(RemoraBlue),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = {
-                                onSave(userIntentText)
+                                if (!isSaving) onSave(userIntentText)
                             }),
                             modifier = Modifier.fillMaxWidth(),
                             decorationBox = { innerTextField ->
@@ -200,6 +203,10 @@ fun SavePromptSheet(
 
                         Spacer(modifier = Modifier.height(24.dp))
 
+                        errorMessage?.let {
+                            Text(it, color = MaterialTheme.colorScheme.error)
+                            Spacer(Modifier.height(8.dp))
+                        }
                         // Two Rounded-Pill Action Buttons
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -207,6 +214,7 @@ fun SavePromptSheet(
                         ) {
                             OutlinedButton(
                                 onClick = onDismiss,
+                                enabled = !isSaving,
                                 shape = RoundedCornerShape(percent = 50),
                                 border = BorderStroke(1.dp, RemoraBorder),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = RemoraNavyDark),
@@ -223,6 +231,7 @@ fun SavePromptSheet(
 
                             Button(
                                 onClick = { onSave(userIntentText) },
+                                enabled = !isSaving,
                                 shape = RoundedCornerShape(percent = 50),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = RemoraNavyDark,
@@ -233,7 +242,7 @@ fun SavePromptSheet(
                                     .height(48.dp)
                             ) {
                                 Text(
-                                    text = "lưu vào remora",
+                                    text = if (isSaving) "đang lưu…" else "lưu vào remora",
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 15.sp
                                 )
