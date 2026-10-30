@@ -63,6 +63,11 @@ class GalleryViewModelTest {
         override suspend fun getResultsForCard(newCardId: Long): List<ResurfacingResultEntity> = emptyList()
         override suspend fun deleteResultsForCard(newCardId: Long) {}
         override suspend fun deleteAllResults() {}
+        override suspend fun getExistingCardIds(ids: List<Long>) = emptyList<Long>()
+        override suspend fun beginAttempt(cardId: Long, maxAttempts: Int) = 0
+        override suspend fun markCompleted(cardId: Long) = 0
+        override suspend fun markFailed(cardId: Long) = 0
+        override suspend fun resetFailed(cardId: Long) = 0
     }
 
     private val fakeCardDao = object : MemoryCardDao {
@@ -162,6 +167,24 @@ class GalleryViewModelTest {
         assertTrue(updatedCards.isEmpty())
         assertFalse(viewModel.actionInProgress.value)
         assertNull(viewModel.actionError.value)
+    }
+
+    @Test
+    fun connectionRetryCoalescesActionsAndReportsOnlyASafeError() = runTest {
+        val viewModel = GalleryViewModel(fakeRepo, fakeResurfaceDao, fakeCardDao)
+        val release = CompletableDeferred<Unit>()
+        val retried = mutableListOf<Long>()
+        viewModel.retryConnections(42) { retried += it; release.await(); error("Private provider response") }
+        viewModel.retryConnections(42) { retried += it }
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(listOf(42L), retried)
+        assertTrue(viewModel.actionInProgress.value)
+
+        release.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertFalse(viewModel.actionInProgress.value)
+        assertEquals("Chưa thể thử lại gợi nhớ. Hãy kiểm tra kết nối AI rồi thử lại.", viewModel.actionError.value)
+        assertTrue(updatedCards.isEmpty())
     }
 
     @Test

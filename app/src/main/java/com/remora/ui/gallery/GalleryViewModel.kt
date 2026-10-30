@@ -5,11 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.remora.core.model.contract.MemoryCardRepository
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
-import com.remora.core.model.entity.ResurfaceGroup
-import com.remora.core.model.entity.ResurfaceRelation
-import com.remora.core.model.resurface.ResurfacedItem
+import com.remora.core.model.resurface.ResurfaceValidator
 import com.remora.data.local.dao.MemoryCardDao
 import com.remora.data.local.dao.ResurfacingResultDao
+import com.remora.ui.resurfacing.ResurfacingBatch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -45,25 +43,25 @@ class GalleryViewModel(
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError = _actionError.asStateFlow()
 
-    val resurfacedItems: StateFlow<List<ResurfacedItem>> = resurfacingResultDao.getRecentResultsFlow()
-        .map { entities ->
-            entities.mapNotNull { entity ->
-                val cardEntity = memoryCardDao.getCardById(entity.candidateCardId)
-                val card = cardEntity?.toDomainModel()
-                if (card != null) {
-                    ResurfacedItem(
-                        candidateCard = card,
-                        group = try { ResurfaceGroup.valueOf(entity.group) } catch (_: Exception) { ResurfaceGroup.SIMILAR },
-                        relation = try { ResurfaceRelation.valueOf(entity.relation) } catch (_: Exception) { ResurfaceRelation.SUPPLEMENT },
-                        newInfo = entity.newInfo,
-                        benefit = entity.benefit,
-                        reason = entity.reason,
-                        confidence = entity.confidence
-                    )
-                } else null
-            }
+    val connectionBatches: StateFlow<List<ResurfacingBatch>> = combine(
+        memoryCardDao.getAllCardsFlow(), resurfacingResultDao.getRecentResultsFlow()
+    ) { entities, results ->
+        val cardsById = entities.associate { it.id to it.toDomainModel() }
+        val resultsBySource = results.groupBy { it.newCardId }
+        entities.filter { it.status == "DONE" }.map { entity ->
+            val status = runCatching { ProcessingStatus.valueOf(entity.resurfacingStatus) }.getOrDefault(ProcessingStatus.FAILED)
+            val items = if (status == ProcessingStatus.DONE) {
+                resultsBySource[entity.id].orEmpty().mapNotNull { row ->
+                    cardsById[row.candidateCardId]?.let(row::toDomainModel)
+                }
+            } else emptyList()
+            ResurfacingBatch(
+                sourceCard = cardsById.getValue(entity.id), status = status,
+                items = ResurfaceValidator.filterValidItems(items, cardsById.keys - entity.id)
+            )
         }
-        .flowOn(Dispatchers.IO)
+    }
+        .flowOn(Dispatchers.Default)
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -83,6 +81,10 @@ class GalleryViewModel(
 
     fun retryCard(cardId: Long, retry: suspend (Long) -> Unit) {
         runCardAction("Chưa thể thử lại. Hãy thử lại sau.") { retry(cardId) }
+    }
+
+    fun retryConnections(cardId: Long, retry: suspend (Long) -> Unit) {
+        runCardAction("Chưa thể thử lại gợi nhớ. Hãy kiểm tra kết nối AI rồi thử lại.") { retry(cardId) }
     }
 
     fun importCard(

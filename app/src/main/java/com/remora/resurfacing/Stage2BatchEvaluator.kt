@@ -9,7 +9,6 @@ import com.remora.core.model.entity.ResurfaceGroup
 import com.remora.core.model.entity.ResurfaceRelation
 import com.remora.core.model.resurface.ResurfaceValidator
 import com.remora.core.model.resurface.ResurfacedItem
-import timber.log.Timber
 
 class Stage2BatchEvaluator(
     private val client: AiGatewayClient
@@ -69,7 +68,7 @@ class Stage2BatchEvaluator(
             )
         }
 
-        // Apply strict validation rules: confidence > 0.80, allowed IDs, group-relation compatibility, max 2 items per group
+        // Validate identities, finite confidence, learning explanations and per-group limits.
         return ResurfaceValidator.filterValidItems(rawItems, allowedCandidateIds = candidateMap.keys)
     }
 }

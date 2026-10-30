@@ -267,5 +267,14 @@ Dữ liệu kết xuất từ `scripts/benchmark-results.json`:
 - Dùng Flow thư viện Room hiện có làm snapshot cho số thẻ và kết quả. Mỗi thay đổi dữ liệu vô hiệu hóa tìm kiếm cũ và cập nhật truy vấn hiện tại; cache vector truy vấn 24 mục vẫn được giữ trong bộ nhớ. Detail tiếp tục mở theo ID qua luồng trực tiếp của T007.
 - Diagnostic tìm kiếm chỉ ghi số lượng/trạng thái, không ghi truy vấn, cụm thời gian hoặc nội dung exception. Không đổi dependency, schema, backend hay mô hình AI.
 
+## 12. T009: Checkpoint gợi nhớ theo ảnh nguồn và retry độc lập (2026-10-30)
+
+- Dùng các cột `resurfacing_status` và `resurfacing_attempt_count` hiện có trên `memory_card` làm checkpoint của từng batch. Room lưu trạng thái `DONE` và thay toàn bộ liên kết của nguồn trong cùng một transaction; kết quả rỗng cũng được lưu hoàn tất. Test Android xác nhận lỗi insert rollback cả trạng thái lẫn dữ liệu cũ.
+- Mỗi chu kỳ gợi nhớ có tối đa ba lần thử, độc lập với extraction/embedding. Retry một batch `FAILED` chỉ reset hai cột gợi nhớ và dùng `REPLACE` cho unique work của nguồn đó để xử lý race khi worker cũ chưa kết thúc. Các yêu cầu đang chờ và startup reconciliation dùng `KEEP`. Test xác nhận ghi chú, OCR, embedding và checkpoint extraction được giữ nguyên.
+- Mỗi ứng viên chỉ xuất hiện một lần trong một batch: giữ kết quả hợp lệ đầu tiên, tối đa hai kết quả mỗi group. Chỉ nhận confidence hữu hạn trong `(0.80, 1.0]`, relation khớp group, ID thuộc input, lý do và lợi ích học tập không rỗng. Ứng viên bị xóa trước lúc commit được loại trong transaction.
+- Đã đối chiếu success schema `ResurfaceResultItem` / `ResurfaceBatchResponse` trong [gateway OpenAPI](../services/gateway/openapi.yaml) và [AI-service OpenAPI](../services/ai-service/openapi.yaml): tất cả trường của item và mảng `results` đều bắt buộc; `candidate_id` có type `integer`. Parser client giữ phân biệt giữa `results: []` hợp lệ và phản hồi thiếu/sai mảng, đồng thời loại ID dạng chuỗi hoặc số thập phân.
+- Feed kết hợp Flow thẻ và liên kết, giữ từng ảnh nguồn riêng và cập nhật cả hai đầu khi dữ liệu thay đổi. Màn hình dùng tiêu đề/nội dung nguyên dạng, lý do, lợi ích học tập và trạng thái của chính batch đó; retry đi qua worker gợi nhớ riêng.
+- Kiểm chứng: `lint testDebugUnitTest assembleDebug` và build APK instrumentation đạt; 111 app unit tests, 13 core tests và 5 Room tests trên Pixel_7 Android 17 / API 37 đạt. API level được đọc bằng ADB. Bằng chứng và giới hạn kiểm thử nằm trong [PROGRESS_REPORT.md](PROGRESS_REPORT.md); thỏa thuận miễn điện thoại thật của nhánh vẫn được giữ.
+
 
 

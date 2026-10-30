@@ -93,7 +93,7 @@ class AiGatewayClient(
 
     suspend fun evaluateResurfacing(batchRequest: ResurfaceBatchRequestDto): Result<ResurfaceBatchResponseDto> {
         val body = json.encodeToString(batchRequest).toRequestBody(JSON_TYPE)
-        return execute({ auth -> request(auth, "resurface-batch", body) }) { json.decodeFromString(it) }
+        return execute({ auth -> request(auth, "resurface-batch", body) }, ResurfaceResponseParser::parse)
     }
 
     private fun request(auth: AiSession, route: String, body: RequestBody): Request = Request.Builder()

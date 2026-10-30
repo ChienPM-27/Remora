@@ -5,6 +5,10 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.remora.core.model.entity.MemoryCard
+import com.remora.core.model.entity.ResurfaceGroup
+import com.remora.core.model.entity.ResurfaceRelation
+import com.remora.core.model.resurface.ResurfacedItem
 
 @Entity(
     tableName = "resurfacing_result",
@@ -58,4 +62,11 @@ data class ResurfacingResultEntity(
 
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis()
-)
+) {
+    fun toDomainModel(candidate: MemoryCard): ResurfacedItem? {
+        if (candidate.id != candidateCardId) return null
+        val parsedGroup = runCatching { ResurfaceGroup.valueOf(group) }.getOrNull() ?: return null
+        val parsedRelation = runCatching { ResurfaceRelation.valueOf(relation) }.getOrNull() ?: return null
+        return ResurfacedItem(candidate, parsedGroup, parsedRelation, newInfo, benefit, reason, confidence)
+    }
+}

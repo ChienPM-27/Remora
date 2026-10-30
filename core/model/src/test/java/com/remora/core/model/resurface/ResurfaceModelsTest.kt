@@ -13,6 +13,9 @@ import org.junit.Test
 
 class ResurfaceModelsTest {
 
+    private fun createItem(card: MemoryCard, group: ResurfaceGroup, relation: ResurfaceRelation, confidence: Float) =
+        ResurfacedItem(card, group, relation, reason = "Review the relevant theorem", benefit = "Solve the new exercise", confidence = confidence)
+
     private fun createTestCard(id: Long, title: String): MemoryCard {
         return MemoryCard(
             id = id,
@@ -53,9 +56,9 @@ class ResurfaceModelsTest {
         val card3 = createTestCard(103L, "Card 3")
 
         val items = listOf(
-            ResurfacedItem(card1, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.80f), // Rejected (<= 0.80)
-            ResurfacedItem(card2, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.79f), // Rejected
-            ResurfacedItem(card3, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.81f)  // Accepted (> 0.80)
+            createItem(card1, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.80f), // Rejected (<= 0.80)
+            createItem(card2, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.79f), // Rejected
+            createItem(card3, ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.81f)  // Accepted (> 0.80)
         )
 
         val filtered = ResurfaceValidator.filterValidItems(items)
@@ -69,8 +72,8 @@ class ResurfaceModelsTest {
         val card2 = createTestCard(999L, "Unknown Card")
 
         val items = listOf(
-            ResurfacedItem(card1, ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.90f),
-            ResurfacedItem(card2, ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.95f)
+            createItem(card1, ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.90f),
+            createItem(card2, ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.95f)
         )
 
         val allowedIds = setOf(101L, 102L, 103L)
@@ -83,10 +86,10 @@ class ResurfaceModelsTest {
     @Test
     fun testMaxTwoItemsPerGroup() {
         val items = listOf(
-            ResurfacedItem(createTestCard(1L, "C1"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.95f),
-            ResurfacedItem(createTestCard(2L, "C2"), ResurfaceGroup.SIMILAR, ResurfaceRelation.SUPPLEMENT, confidence = 0.90f),
-            ResurfacedItem(createTestCard(3L, "C3"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.85f),
-            ResurfacedItem(createTestCard(4L, "C4"), ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.92f)
+            createItem(createTestCard(1L, "C1"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.95f),
+            createItem(createTestCard(2L, "C2"), ResurfaceGroup.SIMILAR, ResurfaceRelation.SUPPLEMENT, confidence = 0.90f),
+            createItem(createTestCard(3L, "C3"), ResurfaceGroup.SIMILAR, ResurfaceRelation.DUPLICATE, confidence = 0.85f),
+            createItem(createTestCard(4L, "C4"), ResurfaceGroup.COMPLEMENTARY, ResurfaceRelation.EXPLANATION, confidence = 0.92f)
         )
 
         val filtered = ResurfaceValidator.filterValidItems(items)

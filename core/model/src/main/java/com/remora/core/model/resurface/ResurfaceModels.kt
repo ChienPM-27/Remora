@@ -38,12 +38,7 @@ data class ResurfaceResult(
 }
 
 object ResurfaceValidator {
-    /**
-     * Quy tắc khớp relation với group (AGENTS.md mục 4):
-     * - SIMILAR: DUPLICATE hoặc SUPPLEMENT
-     * - COMPLEMENTARY: EXPLANATION hoặc SUPPLEMENT
-     * - ACTIONABLE: SUPPLEMENT hoặc CONTRADICTION
-     */
+    /** Only these relation/group pairs convey the intended learning connection. */
     fun isValidRelationForGroup(group: ResurfaceGroup, relation: ResurfaceRelation): Boolean {
         return when (group) {
             ResurfaceGroup.SIMILAR -> relation == ResurfaceRelation.DUPLICATE || relation == ResurfaceRelation.SUPPLEMENT
@@ -52,25 +47,21 @@ object ResurfaceValidator {
         }
     }
 
-    /**
-     * Bộ lọc chuẩn hóa kết quả Resurfacing:
-     * 1. candidate_id khớp input hợp lệ (nếu truyền allowedCandidateIds)
-     * 2. confidence > 0.80 (dùng > thay vì >=)
-     * 3. relation phải khớp group
-     * 4. Tối đa 2 kết quả mỗi group
-     */
+    /** Keep the first valid occurrence of a candidate, with at most two links per group. */
     fun filterValidItems(
         items: List<ResurfacedItem>,
         allowedCandidateIds: Set<Long>? = null
     ): List<ResurfacedItem> {
         val grouped = mutableMapOf<ResurfaceGroup, MutableList<ResurfacedItem>>()
+        val acceptedCandidateIds = mutableSetOf<Long>()
         for (item in items) {
-            if (item.confidence <= 0.80f) continue
+            if (!item.confidence.isFinite() || item.confidence <= 0.80f || item.confidence > 1f) continue
             if (allowedCandidateIds != null && !allowedCandidateIds.contains(item.candidateCard.id)) continue
             if (!isValidRelationForGroup(item.group, item.relation)) continue
+            if (item.reason.isBlank() || item.benefit.isBlank()) continue
 
             val list = grouped.getOrPut(item.group) { mutableListOf() }
-            if (list.size < 2) {
+            if (list.size < 2 && acceptedCandidateIds.add(item.candidateCard.id)) {
                 list.add(item)
             }
         }

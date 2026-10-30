@@ -23,13 +23,15 @@
 
 ## Phase 5: US3 — Find the right memory (P1)
 **Independent validation**: offline keyword hit, empty weak-only matches, query cancellation and reactive counts.
-- [ ] T008 [US3] Enforce strong-only search and reactive library refresh in app/src/main/java/com/remora/search/SemanticSearchEngine.kt and ui/search/SearchViewModel.kt; remove query logs, keep intent/time/abbreviation behavior and live details. Add regression tests in app/src/test/java/com/remora/search/SemanticSearchEngineTest.kt and ui/search/SearchViewModelTest.kt. Covers FR-008/009/013/015.
+- [x] T008 [US3] Enforce strong-only search and reactive library refresh in app/src/main/java/com/remora/search/SemanticSearchEngine.kt and ui/search/SearchViewModel.kt; remove query logs, keep intent/time/abbreviation behavior and live details. Add regression tests in app/src/test/java/com/remora/search/SemanticSearchEngineTest.kt and ui/search/SearchViewModelTest.kt. Covers FR-008/009/013/015.
   - Implementation and automated verification completed on 2026-10-30: 19 search regressions and all 78 app unit tests passed; lint and debug/test APK builds passed. See docs/PROGRESS_REPORT.md.
-  - Device acceptance remains pending: ADB reports no connected devices. Keep this checkbox open until the demo search flow is verified on a physical phone or the user explicitly waives that checkpoint. T009 has not started.
+  - On 2026-10-30 the user explicitly waived physical-phone testing for branch feat/astra-spec-kit-build. T008 is complete based on the verified automated checks; no physical-device execution is claimed. This checkpoint precedes T009.
 
 ## Phase 6: US4 — Reconnect with context (P1)
 **Independent validation**: two source batches remain distinct; empty result cached; independent retry does not re-extract.
-- [ ] T009 [US4] Persist empty/success batch checkpoints and independent retry in app/src/main/java/com/remora/resurfacing/ResurfacingManager.kt and work/ResurfaceWorker.kt; validate finite confidence in (0.80, 1.0], unique known candidates and <=2/group. Display source/candidate/reason/benefit in ui/resurfacing/ResurfacingScreen.kt and ui/gallery/GalleryViewModel.kt. Extend app/src/test/java/com/remora/resurfacing/ tests. Covers FR-010/011/012, SC-005.
+- [x] T009 [US4] Persist empty/success batch checkpoints and independent retry in app/src/main/java/com/remora/resurfacing/ResurfacingManager.kt and work/ResurfaceWorker.kt; validate finite confidence in (0.80, 1.0], unique known candidates and <=2/group. Display source/candidate/reason/benefit in ui/resurfacing/ResurfacingScreen.kt and ui/gallery/GalleryViewModel.kt. Extend app/src/test/java/com/remora/resurfacing/ tests. Covers FR-010/011/012, SC-005.
+  - Completed on 2026-10-30: 111/111 app unit tests and 13/13 core tests passed; lint and debug/test APK builds passed. Five Room persistence/retry tests passed on Pixel_7, Android 17 / API 37, emulator-5558. See docs/PROGRESS_REPORT.md.
+  - Successful and empty batches commit atomically, completed work is reused, and failed connections retry without extraction. Source-specific live batches retain both card identities and learning explanations. Physical-phone testing remains waived for this branch; live-provider and Compose UI execution are not claimed for T009.
 
 ## Phase 7: Cross-cutting verification and polish
 - [ ] T010 Update backend error contracts before implementation in services/gateway/openapi.yaml and services/ai-service/openapi.yaml; bound gateway deadlines/body reads, sanitize upstream errors and robustly parse card fields in services/*/src/main/kotlin/com/remora/*/Application.kt. Add Ktor/parser regressions in services/*/src/test/kotlin/. Covers FR-005/007/013.

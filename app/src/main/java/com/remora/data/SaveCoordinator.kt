@@ -71,6 +71,14 @@ class SaveCoordinator(
         if (dao.getCardById(cardId)?.status == "PENDING") scheduler.analyze(cardId)
     }
 
+    suspend fun retryResurfacing(cardId: Long) = mutationLock.withLock {
+        val restarted = database.resurfacingResultDao().resetFailed(cardId) != 0
+        val card = database.memoryCardDao().getCardById(cardId)
+        if (card?.status == "DONE" && card.resurfacingStatus == "PENDING") {
+            if (restarted) scheduler.retryResurface(cardId) else scheduler.resurface(cardId)
+        }
+    }
+
     suspend fun delete(cardId: Long) = withContext(Dispatchers.IO) {
         mutationLock.withLock {
             val card = database.memoryCardDao().getCardById(cardId) ?: return@withLock

@@ -54,7 +54,7 @@ fun RemoraMainScreen(
     val selectedCard by galleryViewModel.selectedCard.collectAsState()
     val actionInProgress by galleryViewModel.actionInProgress.collectAsState()
     val actionError by galleryViewModel.actionError.collectAsState()
-    val connections by galleryViewModel.resurfacedItems.collectAsState()
+    val connections by galleryViewModel.connectionBatches.collectAsState()
     val query by searchViewModel.query.collectAsState()
     val searchState by searchViewModel.uiState.collectAsState()
     val searching by searchViewModel.isSearching.collectAsState()
@@ -115,7 +115,9 @@ fun RemoraMainScreen(
                     onSubmit = searchViewModel::onSearchSubmit
                 )
                 MainNavigationTab.RESURFACE -> ResurfacingScreen(
-                    items = connections, latestCard = cards.firstOrNull(), onOpenCard = galleryViewModel::showCard)
+                    batches = connections, onOpenCard = galleryViewModel::showCard,
+                    onRetryBatch = { id -> galleryViewModel.retryConnections(id, container.saveCoordinator::retryResurfacing) },
+                    isRetrying = actionInProgress)
                 MainNavigationTab.SETTINGS -> SettingsScreen(onClearAllCards = {
                     galleryViewModel.clearCards(clear = container.saveCoordinator::clear) {
                         scope.launch { snackbar.showSnackbar("Đã xóa thẻ và bản sao ảnh trong Remora") }
