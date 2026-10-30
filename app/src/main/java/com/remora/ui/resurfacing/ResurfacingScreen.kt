@@ -21,10 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +35,6 @@ import coil.compose.AsyncImage
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ResurfaceGroup
 import com.remora.core.model.resurface.ResurfacedItem
-import com.remora.ui.gallery.CardDetailDialog
 import com.remora.ui.theme.RemoraBg
 import com.remora.ui.theme.RemoraBlue
 import com.remora.ui.theme.RemoraBlueSoft
@@ -49,10 +45,10 @@ import com.remora.ui.theme.RemoraSubtleText
 @Composable
 fun ResurfacingScreen(
     items: List<ResurfacedItem>,
+    onOpenCard: (Long) -> Unit,
     latestCard: MemoryCard? = null,
     modifier: Modifier = Modifier
 ) {
-    var selectedCard by remember { mutableStateOf<MemoryCard?>(null) }
 
     val primaryTitle = remember(latestCard, items) {
         when {
@@ -125,7 +121,7 @@ fun ResurfacingScreen(
                     ResurfacingNumberedRow(
                         index = index + 1,
                         item = item,
-                        onClick = { selectedCard = item.candidateCard }
+                        onClick = { onOpenCard(item.candidateCard.id) }
                     )
 
                     if (index < items.size - 1) {
@@ -140,12 +136,6 @@ fun ResurfacingScreen(
         }
     }
 
-    selectedCard?.let { card ->
-        CardDetailDialog(
-            card = card,
-            onDismiss = { selectedCard = null }
-        )
-    }
 }
 
 @Composable

@@ -32,8 +32,10 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.ZoomOutMap
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -45,6 +47,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +56,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -76,17 +82,19 @@ import kotlinx.coroutines.launch
 private const val OCR_COLLAPSED_LINES = 6
 private const val OCR_TOGGLE_MIN_CHARS = 240
 
-/**
- * Card detail as a full-height bottom sheet. Name and signature are unchanged so the existing callers
- * (Timeline, Search, Resurfacing, Gallery) pick up the new design automatically.
- */
+/** Shared detail sheet; the caller supplies the current card from the library flow. */
 @Composable
 fun CardDetailDialog(
     card: MemoryCard,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onRetry: () -> Unit,
+    onDelete: () -> Unit,
+    actionInProgress: Boolean = false,
+    actionError: String? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
+    var confirmDelete by rememberSaveable(card.id) { mutableStateOf(false) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -97,18 +105,43 @@ fun CardDetailDialog(
         CardDetailContent(
             card = card,
             onClose = {
-                scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() }
-            }
+                scope.launch { sheetState.hide(); onDismiss() }
+            },
+            onRetry = onRetry,
+            onRequestDelete = { confirmDelete = true },
+            actionInProgress = actionInProgress,
+            actionError = actionError
+        )
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Xóa thẻ này?") },
+            text = { Text("Thẻ, các liên kết gợi nhớ và bản sao ảnh trong Remora sẽ bị xóa. Thao tác không thể hoàn tác. Ảnh gốc trong thư viện điện thoại được giữ lại.") },
+            confirmButton = {
+                TextButton(enabled = !actionInProgress, onClick = { confirmDelete = false; onDelete() }) {
+                    Text("Xóa", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Giữ lại") } }
         )
     }
 }
 
 @Composable
-private fun CardDetailContent(card: MemoryCard, onClose: () -> Unit) {
+private fun CardDetailContent(
+    card: MemoryCard,
+    onClose: () -> Unit,
+    onRetry: () -> Unit,
+    onRequestDelete: () -> Unit,
+    actionInProgress: Boolean,
+    actionError: String?
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    var imageExpanded by remember { mutableStateOf(false) }
-    var ocrExpanded by remember { mutableStateOf(false) }
+    var imageExpanded by remember(card.id) { mutableStateOf(false) }
+    var ocrExpanded by remember(card.id) { mutableStateOf(false) }
 
     fun copy(label: String, text: String) {
         clipboard.setText(AnnotatedString(text))
@@ -228,6 +261,19 @@ private fun CardDetailContent(card: MemoryCard, onClose: () -> Unit) {
         if (card.status != ProcessingStatus.DONE) {
             Spacer(modifier = Modifier.height(16.dp))
             StatusNotice(card)
+            if (card.status == ProcessingStatus.FAILED) {
+                Button(onClick = onRetry, enabled = !actionInProgress, modifier = Modifier.fillMaxWidth()) {
+                    Text("Thử lại")
+                }
+            }
+        }
+        if (actionInProgress || actionError != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = actionError ?: "Đang cập nhật thẻ…",
+                color = if (actionError != null) MaterialTheme.colorScheme.error else RemoraSubtleText,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
         }
 
         // 5. Why the user saved it
@@ -311,6 +357,13 @@ private fun CardDetailContent(card: MemoryCard, onClose: () -> Unit) {
                 Text("đóng", fontSize = 14.sp, color = Color.White)
             }
         }
+        OutlinedButton(
+            onClick = onRequestDelete,
+            enabled = !actionInProgress,
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        ) {
+            Text("Xóa thẻ", color = MaterialTheme.colorScheme.error)
+        }
     }
 }
 
@@ -366,8 +419,11 @@ private fun StatusNotice(card: MemoryCard) {
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = if (failed) "AI xử lý thất bại. Bạn có thể bấm thử lại ở dòng thời gian."
-                else "AI đang đọc và tóm tắt ảnh này…",
+                text = if (failed) when (card.errorCode) {
+                    "SIGN_IN_REQUIRED" -> "Hãy đăng nhập AI trong Cài đặt rồi bấm Thử lại."
+                    "UNREADABLE_IMAGE" -> "Không đọc được bản sao ảnh. Bạn vẫn có thể xem nội dung đã lưu hoặc xóa thẻ."
+                    else -> "Chưa xử lý được ảnh. Bấm Thử lại để tiếp tục; nội dung đã lưu được giữ nguyên."
+                } else "AI đang đọc và tóm tắt ảnh này…",
                 fontSize = 12.sp,
                 lineHeight = 17.sp,
                 color = fg

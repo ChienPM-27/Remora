@@ -25,10 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -41,10 +37,9 @@ import com.remora.core.model.entity.ProcessingStatus
 fun GalleryScreen(
     cards: List<MemoryCard>,
     onRetryCard: (MemoryCard) -> Unit,
+    onOpenCard: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedCard by remember { mutableStateOf<MemoryCard?>(null) }
-
     if (cards.isEmpty()) {
         Box(
             modifier = modifier.fillMaxSize(),
@@ -66,19 +61,13 @@ fun GalleryScreen(
             items(cards, key = { it.id }) { card ->
                 MemoryCardItem(
                     card = card,
-                    onClick = { selectedCard = card },
+                    onClick = { onOpenCard(card.id) },
                     onRetry = { onRetryCard(card) }
                 )
             }
         }
     }
 
-    selectedCard?.let { card ->
-        CardDetailDialog(
-            card = card,
-            onDismiss = { selectedCard = null }
-        )
-    }
 }
 
 @Composable

@@ -24,7 +24,7 @@ import com.remora.capture.CapturePermissions
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(onClearAllCards: () -> Unit, modifier: Modifier = Modifier) {
+fun SettingsScreen(onClearAllCards: () -> Unit, modifier: Modifier = Modifier, isClearing: Boolean = false) {
     val context = LocalContext.current
     val container = (context.applicationContext as RemoraApp).container
     val dao = container.database.appSettingDao()
@@ -94,7 +94,9 @@ fun SettingsScreen(onClearAllCards: () -> Unit, modifier: Modifier = Modifier) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Dữ liệu trên thiết bị", style = MaterialTheme.typography.titleMedium)
                 Text("Thẻ, ghi chú và bản sao ảnh được lưu trong Remora. Xóa thẻ không xóa ảnh gốc trong thư viện điện thoại.")
-                OutlinedButton(onClick = { showClear = true }) { Text("Xóa toàn bộ thẻ") }
+                OutlinedButton(enabled = !isClearing, onClick = { showClear = true }) {
+                    Text(if (isClearing) "Đang xóa thẻ…" else "Xóa toàn bộ thẻ")
+                }
             }
         }
         Card {
@@ -110,7 +112,7 @@ fun SettingsScreen(onClearAllCards: () -> Unit, modifier: Modifier = Modifier) {
         onDismissRequest = { showClear = false },
         title = { Text("Xóa toàn bộ thẻ?") },
         text = { Text("Thẻ, liên kết và các bản sao ảnh trong Remora sẽ bị xóa. Thao tác không thể hoàn tác. Ảnh gốc trên điện thoại được giữ lại.") },
-        confirmButton = { TextButton(onClick = { showClear = false; onClearAllCards() }) { Text("Xóa toàn bộ") } },
+        confirmButton = { TextButton(enabled = !isClearing, onClick = { showClear = false; onClearAllCards() }) { Text("Xóa toàn bộ") } },
         dismissButton = { TextButton(onClick = { showClear = false }) { Text("Giữ lại") } }
     )
 }

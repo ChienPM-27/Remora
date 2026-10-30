@@ -73,7 +73,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.remora.core.model.entity.ContentType
-import com.remora.core.model.entity.MemoryCard
 import com.remora.search.MatchKind
 import com.remora.search.SearchOutcome
 import com.remora.search.SearchResultCard
@@ -81,7 +80,6 @@ import com.remora.search.Snippets
 import com.remora.ui.common.RemoraPill
 import com.remora.ui.common.label
 import com.remora.ui.common.relativeTime
-import com.remora.ui.gallery.CardDetailDialog
 import com.remora.ui.theme.RemoraBg
 import com.remora.ui.theme.RemoraBlue
 import com.remora.ui.theme.RemoraBlueBadge
@@ -102,13 +100,13 @@ fun SearchScreen(
     query: String,
     uiState: SearchUiState,
     onQueryChanged: (String) -> Unit,
+    onOpenCard: (Long) -> Unit,
     modifier: Modifier = Modifier,
     isSearching: Boolean = false,
     recentQueries: List<String> = emptyList(),
     indexedCount: Int = 0,
     onSubmit: () -> Unit = {}
 ) {
-    var selectedCard by remember { mutableStateOf<MemoryCard?>(null) }
     var typeFilter by remember { mutableStateOf<ContentType?>(null) }
 
     val outcome: SearchOutcome? = when (uiState) {
@@ -284,7 +282,7 @@ fun SearchScreen(
                         ResultCard(
                             item = item,
                             highlightTerms = uiState.outcome.highlightTerms,
-                            onClick = { selectedCard = item.card }
+                            onClick = { onOpenCard(item.card.id) }
                         )
                     }
                 }
@@ -292,9 +290,6 @@ fun SearchScreen(
         }
     }
 
-    selectedCard?.let { card ->
-        CardDetailDialog(card = card, onDismiss = { selectedCard = null })
-    }
 }
 
 @Composable

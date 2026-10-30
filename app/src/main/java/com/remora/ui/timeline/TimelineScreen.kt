@@ -59,7 +59,6 @@ import coil.compose.AsyncImage
 import com.remora.core.model.entity.MemoryCard
 import com.remora.core.model.entity.ProcessingStatus
 import com.remora.ui.common.RemoraPill
-import com.remora.ui.gallery.CardDetailDialog
 import com.remora.ui.theme.RemoraBg
 import com.remora.ui.theme.RemoraBlue
 import com.remora.ui.theme.RemoraBlueSoft
@@ -74,11 +73,11 @@ import java.util.Locale
 fun TimelineScreen(
     cards: List<MemoryCard>,
     onRetryCard: (MemoryCard) -> Unit,
+    onOpenCard: (Long) -> Unit,
     onImportImage: (Uri, String?) -> Unit,
     onNavigateToSearch: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var selectedCard by remember { mutableStateOf<MemoryCard?>(null) }
     var selectedSubject by remember { mutableStateOf("tất cả") }
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
 
@@ -276,19 +275,12 @@ fun TimelineScreen(
                 items(filteredCards, key = { it.id }) { card ->
                     TimelineCardRow(
                         card = card,
-                        onClick = { selectedCard = card },
+                        onClick = { onOpenCard(card.id) },
                         onRetry = { onRetryCard(card) }
                     )
                 }
             }
         }
-    }
-
-    selectedCard?.let { card ->
-        CardDetailDialog(
-            card = card,
-            onDismiss = { selectedCard = null }
-        )
     }
 
     pendingImportUri?.let { uri ->

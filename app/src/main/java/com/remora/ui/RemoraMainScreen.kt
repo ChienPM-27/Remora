@@ -20,6 +20,7 @@ import com.remora.capture.CaptureForegroundService
 import com.remora.capture.NotificationHelper
 import com.remora.ui.capture.SavePromptSheet
 import com.remora.ui.gallery.GalleryViewModel
+import com.remora.ui.gallery.CardDetailDialog
 import com.remora.ui.resurfacing.ResurfacingScreen
 import com.remora.ui.search.SearchScreen
 import com.remora.ui.search.SearchViewModel
@@ -50,12 +51,19 @@ fun RemoraMainScreen(
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
     val cards by galleryViewModel.cards.collectAsState()
+    val selectedCard by galleryViewModel.selectedCard.collectAsState()
+    val actionInProgress by galleryViewModel.actionInProgress.collectAsState()
+    val actionError by galleryViewModel.actionError.collectAsState()
     val connections by galleryViewModel.resurfacedItems.collectAsState()
     val query by searchViewModel.query.collectAsState()
     val searchState by searchViewModel.uiState.collectAsState()
     val searching by searchViewModel.isSearching.collectAsState()
     val recent by searchViewModel.recentQueries.collectAsState()
     val indexed by searchViewModel.indexedCount.collectAsState()
+
+    LaunchedEffect(actionError) {
+        actionError?.let { snackbar.showSnackbar(it) }
+    }
 
     LaunchedEffect(Unit) {
         CaptureEventManager.screenshotEvents.collect { uri ->
@@ -94,25 +102,38 @@ fun RemoraMainScreen(
             when (currentTab) {
                 MainNavigationTab.TIMELINE -> TimelineScreen(
                     cards = cards,
-                    onRetryCard = { card -> scope.launch { container.saveCoordinator.retry(card.id) } },
+                    onRetryCard = { card -> galleryViewModel.retryCard(card.id, container.saveCoordinator::retry) },
+                    onOpenCard = galleryViewModel::showCard,
                     onImportImage = { uri, _ -> activeCapture = uri.toString(); saveError = null },
                     onNavigateToSearch = { currentTab = MainNavigationTab.SEARCH }
                 )
                 MainNavigationTab.SEARCH -> SearchScreen(
                     query = query, uiState = searchState,
                     onQueryChanged = searchViewModel::onQueryChanged,
+                    onOpenCard = galleryViewModel::showCard,
                     isSearching = searching, recentQueries = recent, indexedCount = indexed,
                     onSubmit = searchViewModel::onSearchSubmit
                 )
-                MainNavigationTab.RESURFACE -> ResurfacingScreen(items = connections, latestCard = cards.firstOrNull())
+                MainNavigationTab.RESURFACE -> ResurfacingScreen(
+                    items = connections, latestCard = cards.firstOrNull(), onOpenCard = galleryViewModel::showCard)
                 MainNavigationTab.SETTINGS -> SettingsScreen(onClearAllCards = {
-                    scope.launch {
-                        container.saveCoordinator.clear()
-                        snackbar.showSnackbar("Đã xóa thẻ và bản sao ảnh trong Remora")
+                    galleryViewModel.clearCards(clear = container.saveCoordinator::clear) {
+                        scope.launch { snackbar.showSnackbar("Đã xóa thẻ và bản sao ảnh trong Remora") }
                     }
-                })
+                }, isClearing = actionInProgress)
             }
         }
+    }
+
+    selectedCard?.let { card ->
+        CardDetailDialog(
+            card = card,
+            onDismiss = galleryViewModel::dismissCard,
+            onRetry = { galleryViewModel.retryCard(card.id, container.saveCoordinator::retry) },
+            onDelete = { galleryViewModel.deleteCard(card.id, container.saveCoordinator::delete) },
+            actionInProgress = actionInProgress,
+            actionError = actionError
+        )
     }
 
     activeCapture?.let { image ->

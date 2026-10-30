@@ -10,9 +10,13 @@ import com.remora.core.model.entity.ResurfaceRelation
 import com.remora.core.model.resurface.ResurfacedItem
 import com.remora.data.local.dao.MemoryCardDao
 import com.remora.data.local.dao.ResurfacingResultDao
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -30,6 +34,16 @@ class GalleryViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    private val selectedCardId = MutableStateFlow<Long?>(null)
+    val selectedCard: StateFlow<MemoryCard?> = combine(cards, selectedCardId) { currentCards, id ->
+        currentCards.firstOrNull { it.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    private val _actionInProgress = MutableStateFlow(false)
+    val actionInProgress = _actionInProgress.asStateFlow()
+    private val _actionError = MutableStateFlow<String?>(null)
+    val actionError = _actionError.asStateFlow()
 
     val resurfacedItems: StateFlow<List<ResurfacedItem>> = resurfacingResultDao.getRecentResultsFlow()
         .map { entities ->
@@ -56,16 +70,19 @@ class GalleryViewModel(
             initialValue = emptyList()
         )
 
-    fun retryCard(card: MemoryCard, onRetryEnqueued: (Long) -> Unit) {
-        viewModelScope.launch {
-            val pendingCard = card.copy(
-                status = ProcessingStatus.PENDING,
-                attemptCount = 0,
-                errorCode = null
-            )
-            repository.updateCard(pendingCard)
-            onRetryEnqueued(card.id)
+    fun showCard(cardId: Long) {
+        if (!_actionInProgress.value) {
+            _actionError.value = null
+            selectedCardId.value = cardId
         }
+    }
+
+    fun dismissCard() {
+        selectedCardId.value = null
+    }
+
+    fun retryCard(cardId: Long, retry: suspend (Long) -> Unit) {
+        runCardAction("Chưa thể thử lại. Hãy thử lại sau.") { retry(cardId) }
     }
 
     fun importCard(
@@ -86,9 +103,35 @@ class GalleryViewModel(
         }
     }
 
-    fun deleteCard(cardId: Long) {
+    fun deleteCard(cardId: Long, delete: suspend (Long) -> Unit) {
+        runCardAction("Chưa xóa được thẻ. Hãy thử lại.") {
+            delete(cardId)
+            if (selectedCardId.value == cardId) selectedCardId.value = null
+        }
+    }
+
+    fun clearCards(clear: suspend () -> Unit, onCleared: () -> Unit = {}) {
+        runCardAction("Chưa xóa được toàn bộ thẻ. Hãy thử lại.") {
+            clear()
+            selectedCardId.value = null
+            onCleared()
+        }
+    }
+
+    private fun runCardAction(errorMessage: String, action: suspend () -> Unit) {
+        if (_actionInProgress.value) return
+        _actionInProgress.value = true
+        _actionError.value = null
         viewModelScope.launch {
-            repository.deleteCard(cardId)
+            try {
+                action()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _actionError.value = errorMessage
+            } finally {
+                _actionInProgress.value = false
+            }
         }
     }
 }
