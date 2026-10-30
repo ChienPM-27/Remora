@@ -1,22 +1,3 @@
-<!--
-SYNC IMPACT REPORT
-- Version Change: Unratified Draft -> 1.0.0
-- Ratification Date: 2026-10-22
-- Primary Sources: AGENTS.md (Sections 2, 5, 9), docs/architecture/00-overview.md (Section 4), docs/decisions.md
-- Core Principles Ratified:
-  1. Privacy First (User Consent & Zero Sensitive Logging)
-  2. Absolute Secrets Protection (No API Keys in Artifacts)
-  3. Single-Call Resurfacing Batching & Cost Optimization
-  4. Fault Tolerance & Graceful Degradation (Timeout, Bounded Retry, 429 Handling)
-  5. Asynchronous Non-Blocking UI (Instant PENDING Card Creation)
-  6. Simplicity & Anti-Speculative Abstraction (No Premature DI/Frameworks)
-  7. Concurrent Unit Testing for Pure Logic (Zero Test Deferral)
-  8. Deterministic Demo Execution (Reproducible Seed & Cache)
-  9. Strict Feature Freeze at h22 (Bug Fixes & Demo Prep Only)
-- Quality Gates & DoD: Mandatory `./gradlew lint testDebugUnitTest assembleDebug` reporting.
-- Deferred Items / Follow-up TODOs: None.
--->
-
 # Remora Project Constitution
 
 ## Core Principles
@@ -62,14 +43,21 @@ SYNC IMPACT REPORT
   - Ambiguous Vietnamese time-range resolution (regex date filters).
   - Resurfacing batch grouping, relation-group conformance rules, candidate ID validation, and confidence threshold filtering (`confidence > 0.80`).
 
-### VIII. Deterministic Demo Execution
-- The demo path MUST be deterministic, reliable, and reproducible in front of judges.
-- A pre-seeded demo dataset of 30–50 screenshots across 3–4 subjects (with matched theory-problem-solution pairs) MUST be pre-processed and cached.
-- Resurfacing results and search rankings for the primary demo scenario MUST yield consistent, validated outputs without stochastic hallucinations or random failures.
+### VIII. Local Ownership and Data Preservation
+- Saved screenshots and notes MUST remain useful offline. New saves MUST retain an app-owned image copy.
+- Database upgrades MUST preserve cards and preferences through explicit migrations.
+- Deletion MUST remove owned copies and connections without deleting original gallery images.
+- Successful AI stages and empty resurfacing batches MUST be checkpointed to avoid repeated uploads.
+- Deterministic synthetic test fixtures MUST remain separate from the user's actual library.
 
-### IX. Strict Feature Freeze at h22
-- At milestone **h22** of the 24-hour hackathon, a strict feature freeze takes effect.
-- Zero new features may be initiated after h22. All remaining time MUST be dedicated solely to bug fixing, regression testing, demo rehearsals, and presentation preparation.
+### IX. Coherent Product and Honest Release Gates
+- Remora serves students and independent learners preserving meaningful screenshots. Library, search, connections, and settings MUST form real end-to-end journeys.
+- Consent MUST be independent of monitoring/notification preferences. Controls MUST persist their actual behavior.
+- Search MUST reject below-threshold results; every connection MUST identify the source card and a concrete learning benefit.
+- Shared account passwords MUST NOT be compiled into distributable APKs. Provider keys remain backend-only.
+- Loading, offline, error, empty, and retry states MUST be explicit; invented user notes and placeholder actions are prohibited.
+- Production readiness requires operational auth/quotas, release signing, provider availability, and real-device evidence. Passing a build alone does not establish readiness.
+- The user's 2026-10-30 product-development mandate supersedes the elapsed hackathon h22 freeze.
 
 ---
 
@@ -96,7 +84,7 @@ SYNC IMPACT REPORT
 ## Development Workflow & Working Agreement
 
 1. **Spec Kit as Single Planner:**
-   - Spec Kit is the authoritative lifecycle planner (`constitution` → `specify` → `plan` → `tasks` → `implement`). No secondary plans or rogue task trackers may be created.
+   - Spec Kit is the authoritative lifecycle planner (`constitution` → `specify` → `clarify` → `plan` → `tasks` → `analyze` → `implement`). No secondary plans or rogue task trackers may be created.
 2. **Atomic Task Execution:**
    - Work proceeds strictly one task at a time following the dependency order in `tasks.md`. Each change must remain compact and reviewable.
 3. **Communication Protocol:**
@@ -109,11 +97,12 @@ SYNC IMPACT REPORT
 
 ## Governance
 
-- This Constitution constitutes the supreme law of the Remora project. It supersedes all informal agreements, ad-hoc suggestions, and speculative refactoring.
+- This Constitution guides active specifications; explicit user instructions take precedence. Historical MVP documents remain evidence, not the current task queue.
+- The 2026-10-30 autonomous product mandate authorizes reversible product and architecture choices with documented assumptions; deployments and paid infrastructure remain separate operational actions.
 - Any amendment to these principles requires explicit human approval, documentation in `docs/decisions.md`, and a formal version bump:
   - **MAJOR**: Breaking changes to core principles, privacy boundaries, or hackathon scope.
   - **MINOR**: Addition of new principles, quality gates, or expanded operational constraints.
   - **PATCH**: Wording improvements, typos, and clarifying adjustments.
 - All code reviews, CI checks, and agent tasks MUST verify full compliance against this document before merging.
 
-**Version**: 1.0.0 | **Ratified**: 2026-10-22 | **Last Amended**: 2026-10-22
+**Version**: 2.0.0 | **Ratified**: 2026-10-22 | **Last Amended**: 2026-10-30

@@ -8,6 +8,19 @@ related_code: ["services/ai-service", "services/gateway", "core/model"]
 
 # Nhật ký Quyết định & Bằng chứng Thực nghiệm (Decisions Log)
 
+## 2026-10-30 — Trustworthy memory product mandate
+
+- Constitution 2.0.0 replaces elapsed hackathon freeze/pre-seeding with local ownership,
+  persistent controls, source-specific connections, and honest release gates. The user's
+  autonomous product request authorizes reversible design/architecture decisions.
+- Active Spec Kit artifacts: `specs/002-trustworthy-memory/`; historical 001 remains unchanged.
+- Preserve existing modules/dependencies/model configuration. Additive Room migration, owned
+  image copies, unique resumable jobs and token-only runtime sign-in address observed defects.
+- Baseline at c857a41: `gradlew lint testDebugUnitTest assembleDebug :core:model:test`
+  completed successfully in 2m 2s. This is local verification, not live-provider/device evidence.
+- Old deployment/model/demo claims below are historical records; they do not certify current
+  production readiness. No infrastructure deployment is included in this work.
+
 Tài liệu này ghi nhận các tham số API, kết quả đo đạc thực nghiệm (benchmark), phiên bản thư viện và các quyết định kiến trúc quan trọng trong quá trình phát triển Remora MVP theo quy ước trong [AGENTS.md](../AGENTS.md).
 
 > [!NOTE]
